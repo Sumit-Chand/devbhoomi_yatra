@@ -1,9 +1,10 @@
-// REST API with in-memory data. Next: Mongoose models to make users and reports permanent.
+// REST API with MongoDB persistence when MONGODB_URI is configured.
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import mongoose from 'mongoose'
 import { randomUUID, randomBytes } from 'node:crypto'
 import { places, buildRoute, buildItinerary } from './places.js'
 
@@ -13,6 +14,7 @@ const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase()
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const STATUSES = ['Pending', 'In Review', 'Resolved', 'Rejected']
 const MAX_REPORTS = 1000
+const MONGODB_URI = process.env.MONGODB_URI?.trim()
 const LIVE_DATA_TTL_MS = 10 * 60 * 1000
 const NDMA_FEED_URL = 'https://sachet.ndma.gov.in/cap_public_website/rss/rss_india.xml'
 const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast'
@@ -31,9 +33,30 @@ app.use(express.json({ limit: '10kb' }))
 
 const reports = []
 const users = []
+const userSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true, maxlength: 60 },
+  email: { type: String, required: true, unique: true, maxlength: 120 },
+  hash: { type: String, required: true },
+  role: { type: String, enum: ['user', 'admin'], required: true },
+}, { timestamps: true, versionKey: false })
+const reportSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  category: { type: String, required: true, maxlength: 40 },
+  description: { type: String, required: true, maxlength: 1000 },
+  location: { type: String, required: true, maxlength: 200 },
+  status: { type: String, enum: STATUSES, required: true },
+}, { timestamps: true, versionKey: false })
+const User = mongoose.model('User', userSchema)
+const Report = mongoose.model('Report', reportSchema)
 const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
 const sign = u => jwt.sign({ sub: u.id, role: u.role }, SECRET, { expiresIn: '7d' })
 const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role })
+const asyncHandler = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
+const findUserByEmail = email => MONGODB_URI ? User.findOne({ email }).lean() : users.find(u => u.email === email)
+const findUserById = id => MONGODB_URI ? User.findOne({ id }).lean() : users.find(u => u.id === id)
+const listReports = () => MONGODB_URI ? Report.find({}, { _id: 0, id: 1, category: 1, description: 1, location: 1, status: 1 }).lean() : reports
+const countReports = () => MONGODB_URI ? Report.countDocuments() : reports.length
 
 function auth(req, res, next) {
   const token = (req.headers.authorization || '').replace(/^Bearer /, '')
@@ -43,36 +66,42 @@ function auth(req, res, next) {
 const adminOnly = (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }))
 
 // ---- health
-app.get('/api/health', (_req, res) => res.json({ ok: true }))
+app.get('/api/health', (_req, res) => res.json({ ok: true, storage: MONGODB_URI ? 'mongodb' : 'memory' }))
 
 // ---- auth
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', asyncHandler(async (req, res) => {
   const name = text(req.body?.name, 60)
   const email = text(req.body?.email, 120)?.toLowerCase()
   const password = req.body?.password
   if (!name || !email || !/^\S+@\S+\.\S+$/.test(email) || typeof password !== 'string' || password.length < 8 || password.length > 72) {
     return res.status(400).json({ error: 'Enter your name, a valid email and a password of 8 to 72 characters' })
   }
-  if (users.some(u => u.email === email)) return res.status(409).json({ error: 'This email is already registered' })
+  if (await findUserByEmail(email)) return res.status(409).json({ error: 'This email is already registered' })
   const u = { id: randomUUID(), name, email, hash: await bcrypt.hash(password, 10), role: email === ADMIN_EMAIL ? 'admin' : 'user' }
-  users.push(u)
+  if (MONGODB_URI) {
+    try { await User.create(u) }
+    catch (error) {
+      if (error.code === 11000) return res.status(409).json({ error: 'This email is already registered' })
+      throw error
+    }
+  } else users.push(u)
   res.status(201).json({ token: sign(u), user: pub(u) })
-})
+}))
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const email = text(req.body?.email, 120)?.toLowerCase()
   const password = req.body?.password
-  const u = users.find(x => x.email === email)
+  const u = email ? await findUserByEmail(email) : null
   if (!u || typeof password !== 'string' || !(await bcrypt.compare(password, u.hash))) {
     return res.status(401).json({ error: 'Email or password is incorrect' })
   }
   res.json({ token: sign(u), user: pub(u) })
-})
+}))
 
-app.get('/api/auth/me', auth, (req, res) => {
-  const u = users.find(x => x.id === req.user.sub)
+app.get('/api/auth/me', auth, asyncHandler(async (req, res) => {
+  const u = await findUserById(req.user.sub)
   u ? res.json(pub(u)) : res.status(401).json({ error: 'Please log in' })
-})
+}))
 
 const districtNames = [
   'Uttarakhand', 'Dehradun', 'Haridwar', 'Pauri Garhwal', 'Tehri Garhwal', 'Uttarkashi',
@@ -268,33 +297,42 @@ app.get('/api/alerts', async (_req, res) => {
 })
 
 // ---- reports
-app.get('/api/reports', (_req, res) => res.json(reports))
+app.get('/api/reports', asyncHandler(async (_req, res) => res.json(await listReports())))
 
-app.post('/api/reports', (req, res) => {
+app.post('/api/reports', asyncHandler(async (req, res) => {
   const category = text(req.body?.category, 40)
   const description = text(req.body?.description, 1000)
   const location = text(req.body?.location, 200)
   if (!category || !description || !location) {
     return res.status(400).json({ error: 'category, description and location are required text fields' })
   }
-  if (reports.length >= MAX_REPORTS) return res.status(503).json({ error: 'Report storage is full (demo limit)' })
+  if (await countReports() >= MAX_REPORTS) return res.status(503).json({ error: 'Report storage is full (demo limit)' })
   const r = { id: 'RPT-' + randomUUID().slice(0, 8).toUpperCase(), category, description, location, status: 'Pending' }
-  reports.push(r)
+  if (MONGODB_URI) await Report.create(r)
+  else reports.push(r)
   res.status(201).json(r)
-})
+}))
 
-app.patch('/api/reports/:id', auth, adminOnly, (req, res) => {
-  const r = reports.find(x => x.id === req.params.id)
-  if (!r) return res.status(404).json({ error: 'Report not found' })
+app.patch('/api/reports/:id', auth, adminOnly, asyncHandler(async (req, res) => {
   const { status } = req.body ?? {}
   if (!STATUSES.includes(status)) return res.status(400).json({ error: `status must be one of: ${STATUSES.join(', ')}` })
-  r.status = status
+  let r
+  if (MONGODB_URI) {
+    r = await Report.findOneAndUpdate({ id: req.params.id }, { $set: { status } }, { new: true, projection: { _id: 0, id: 1, category: 1, description: 1, location: 1, status: 1 } }).lean()
+  } else {
+    r = reports.find(x => x.id === req.params.id)
+    if (r) r.status = status
+  }
+  if (!r) return res.status(404).json({ error: 'Report not found' })
   res.json(r)
-})
+}))
 
 // ---- dashboard stats
-const tally = key => Object.entries(reports.reduce((m, r) => ((m[r[key]] = (m[r[key]] || 0) + 1), m), {})).map(([name, count]) => ({ name, count }))
-app.get('/api/stats', (_req, res) => res.json({ total: reports.length, byCategory: tally('category'), byStatus: tally('status') }))
+const tally = (items, key) => Object.entries(items.reduce((m, r) => ((m[r[key]] = (m[r[key]] || 0) + 1), m), {})).map(([name, count]) => ({ name, count }))
+app.get('/api/stats', asyncHandler(async (_req, res) => {
+  const items = await listReports()
+  res.json({ total: items.length, byCategory: tally(items, 'category'), byStatus: tally(items, 'status') })
+}))
 
 // ---- places data + trip planner (login required so the AI key cannot be used anonymously)
 app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, places: places.map(({ next, months, ...p }) => p) }))
@@ -342,8 +380,25 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }))
 app.use((err, _req, res, _next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' })
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request body too large' })
+  if (MONGODB_URI && mongoose.connection.readyState !== 1) {
+    console.error('Persistent storage is unavailable:', err)
+    return res.status(503).json({ error: 'Persistent storage is temporarily unavailable' })
+  }
   console.error(err)
   res.status(500).json({ error: 'Internal server error' })
 })
 
-app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`))
+async function start() {
+  if (MONGODB_URI) {
+    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
+    console.log('Connected to MongoDB')
+  } else {
+    console.warn('MONGODB_URI is empty: users and reports are stored in memory and will be lost on restart.')
+  }
+  app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`))
+}
+
+start().catch(error => {
+  console.error('Backend startup failed:', error.message)
+  process.exitCode = 1
+})
