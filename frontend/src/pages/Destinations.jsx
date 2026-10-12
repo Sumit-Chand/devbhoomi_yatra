@@ -33,32 +33,47 @@ function PhotoTile({ title, image, subtitle, loading, onClick, label }) {
   const caption = loading ? 'Loading photo…' : `${image ? '' : 'Photo unavailable · '}${subtitle}`
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-gradient-to-br from-pine via-emerald-900 to-sky-900 text-left shadow-sm transition hover:shadow-lg focus-visible:outline"
-    >
+    <div className="relative overflow-hidden rounded-xl">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className="group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-gradient-to-br from-pine via-emerald-900 to-sky-900 text-left shadow-sm transition hover:shadow-lg focus-visible:outline"
+      >
+        {image && (
+          <img
+            src={image.thumbnailUrl}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+        )}
+        <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/10" />
+        <span className="absolute inset-x-0 bottom-0 p-4 text-white">
+          <span className="block text-lg font-bold drop-shadow sm:text-xl">{title}</span>
+          <span className="mt-1 block text-sm text-white/90">{caption}</span>
+        </span>
+      </button>
       {image && (
-        <img
-          src={image.thumbnailUrl}
-          alt=""
-          loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
-        />
+        <a
+          href={image.pageUrl}
+          target="_blank"
+          rel="noreferrer"
+          title={`Photo by ${image.artist}, licensed ${image.license}`}
+          aria-label={`Photo attribution: ${image.artist}, ${image.license}; open Wikimedia Commons file`}
+          className="absolute right-2 top-2 z-10 max-w-[90%] truncate rounded bg-black/65 px-2 py-1 text-xs text-white underline underline-offset-2"
+        >
+          {image.artist} · {image.license}
+        </a>
       )}
-      <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/10" />
-      <span className="absolute inset-x-0 bottom-0 p-4 text-white">
-        <span className="block text-lg font-bold drop-shadow sm:text-xl">{title}</span>
-        <span className="mt-1 block text-sm text-white/90">{caption}</span>
-      </span>
-    </button>
+    </div>
   )
 }
 
 export default function Destinations() {
   const { loading, error, data } = useApi('/api/places')
   const { data: feedbackData } = useApi('/api/recommendation-feedback/summary')
+  const { loading: activitiesLoading, error: activitiesError, data: activitiesData } = useApi('/api/adventure-activities')
   const [selectedDistrict, setSelectedDistrict] = useState('')
   const [region, setRegion] = useState('Any')
   const [month, setMonth] = useState(String(new Date().getMonth() + 1))
@@ -75,6 +90,10 @@ export default function Destinations() {
   const districts = [...groupedPlaces.keys()].sort()
   const ratingSummary = new Map((feedbackData?.ratings || []).map(summary => [summary.destinationId, summary]))
   const districtPlaces = groupedPlaces.get(selectedDistrict) || []
+  const adventureDistricts = activitiesData?.districts || []
+  const visibleAdventureDistricts = selectedDistrict
+    ? adventureDistricts.filter(item => item.district === selectedDistrict)
+    : adventureDistricts
   const recommendations = all
     .filter(place => region === 'Any' || place.region === region)
     .map(place => {
@@ -310,7 +329,7 @@ export default function Destinations() {
                       title={name}
                       image={cover}
                       loading={thumbnails[placeId]?.loading}
-                      subtitle={`${count} ${count === 1 ? 'place' : 'places'} · Explore district`}
+                      subtitle={`${count} ${count === 1 ? 'place' : 'places'} · Nature scenery`}
                       label={`Open ${name} district and browse ${count} places`}
                       onClick={() => setSelectedDistrict(name)}
                     />
@@ -336,7 +355,7 @@ export default function Destinations() {
                         title={place.name}
                         image={thumbnails[place.id]?.image}
                         loading={thumbnails[place.id]?.loading}
-                        subtitle={`${place.district} · ${place.altitude.toLocaleString('en-IN')} m`}
+                        subtitle={`Nature scenery · ${place.altitude.toLocaleString('en-IN')} m`}
                         label={`Open details for ${place.name}`}
                         onClick={() => openPlace(place)}
                       />
@@ -346,6 +365,50 @@ export default function Destinations() {
               )}
           </>
         )}
+      </section>
+      <section className="mt-10" aria-labelledby="adventure-heading">
+        <h2 id="adventure-heading" className="text-2xl font-semibold text-pine">Adventure sports and outdoor activities</h2>
+        <p className="mt-1 text-sm text-ink/70">Browse suggested activities and the places associated with them in each district. This is a guide, not live operator or opening information.</p>
+        {activitiesLoading && <p className="mt-4" role="status">Loading district activities</p>}
+        {activitiesError && <p className="mt-4 text-red-800" role="alert">Could not load adventure activities: {activitiesError}</p>}
+        {!activitiesLoading && !activitiesError && (
+          <ul className="mt-4 grid gap-4 md:grid-cols-2">
+            {visibleAdventureDistricts.map(item => (
+              <li key={item.district} className="rounded-xl border border-pine/15 bg-white p-5">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-xl font-semibold text-pine">{item.district}</h3>
+                  <span className="text-sm text-ink/60">{item.region}</span>
+                </div>
+                {item.activities.length > 0 ? (
+                  <ul className="mt-3 space-y-4">
+                    {item.activities.map(activity => (
+                      <li key={activity.name}>
+                        <h4 className="font-semibold">{activity.name}</h4>
+                        <p className="mt-1 text-sm"><span className="font-medium">Where:</span> {activity.locations.join('; ')}</p>
+                        <p className="mt-1 text-sm text-ink/70">{activity.note}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 text-sm text-ink/70">{item.note}</p>
+                )}
+                {item.sources.length > 0 && (
+                  <p className="mt-4 border-t border-pine/10 pt-3 text-xs text-ink/70">
+                    Sources: {item.sources.map((source, index) => (
+                      <span key={source.url}>
+                        {index > 0 && ' · '}
+                        <a href={source.url} target="_blank" rel="noreferrer" className="underline">{source.label}</a>
+                      </span>
+                    ))}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-4 rounded-lg bg-glacier/50 p-4 text-sm text-ink/80">
+          Availability can change with weather, season, permits, river and forest restrictions, and operator schedules. Check current local rules and use qualified, authorized providers; do not rely on this page for safety or same-day availability.
+        </p>
       </section>
       {selectedPlace && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) closePlace() }}>
@@ -360,7 +423,7 @@ export default function Destinations() {
             <div className="mt-4 grid gap-6 md:grid-cols-[2fr,1fr]">
               <section aria-labelledby="place-photos-heading">
                 <h3 id="place-photos-heading" className="text-lg font-semibold text-pine">Photos</h3>
-                <p className="text-sm text-ink/70">Community-sourced illustrative photos are retrieved from Wikimedia Commons. Check each file’s page to confirm its subject, attribution and reuse conditions.</p>
+                <p className="text-sm text-ink/70">Illustrative nature and scenery photos are from Wikimedia Commons and may show the wider district rather than this exact place. Check each file’s page for its subject, attribution and reuse conditions.</p>
                 {gallery.loading && <p className="mt-4" role="status">Loading destination photos</p>}
                 {gallery.error && <p className="mt-4 text-red-800" role="alert">Could not load photos: {gallery.error}</p>}
                 {!gallery.loading && !gallery.error && gallery.images.length === 0 && (
@@ -391,6 +454,13 @@ export default function Destinations() {
                 <p className="mt-2 text-sm">Best listed in: {selectedPlace.season}. Current opening/access status is not verified live; confirm with local authorities.</p>
                 <p className="mt-2 text-sm">{selectedPlace.tip}</p>
                 <ul className="mt-2 list-disc pl-5 text-sm">{selectedPlace.highlights.map(highlight => <li key={highlight}>{highlight}</li>)}</ul>
+                {selectedPlace.sources?.map(source => (
+                  <p key={source.url} className="mt-3 text-xs text-ink/70">
+                    Source for {source.verifiedFields.join(', ')}: <a href={source.url} target="_blank" rel="noreferrer" className="underline">{source.organization}</a>
+                    {' · Checked '}{source.checkedAt}
+                  </p>
+                ))}
+                <p className="mt-3 text-xs text-ink/70">Access and opening status are not live-verified. Confirm the place, route, permits and conditions locally before travel.</p>
                 <div className="mt-5 border-t border-pine/15 pt-4">
                   <h3 className="text-lg font-semibold text-pine">Visitor feedback</h3>
                   {ratePlace(selectedPlace)}

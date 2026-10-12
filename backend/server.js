@@ -8,6 +8,7 @@ import mongoose from 'mongoose'
 import { createHash, randomUUID, randomBytes } from 'node:crypto'
 import { places, buildRoute, buildItinerary } from './places.js'
 import { destinationDataNotes } from './destination-sources.js'
+import { adventureActivities, adventureActivityNotes } from './adventure-activities.js'
 
 const PORT = process.env.PORT || 5000
 const ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
@@ -518,6 +519,10 @@ app.get('/api/stats', asyncHandler(async (_req, res) => {
 
 // ---- places data + trip planner (login required so the AI key cannot be used anonymously)
 app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, dataNotes: destinationDataNotes, places: places.map(({ next, ...p }) => p) }))
+app.get('/api/adventure-activities', (_req, res) => res.json({
+  districts: adventureActivities,
+  dataNotes: adventureActivityNotes,
+}))
 
 function metadataText(value) {
   return (value || '').replace(/<[^>]*>/g, ' ')
@@ -525,35 +530,14 @@ function metadataText(value) {
     .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/\s+/g, ' ').trim()
 }
 
-async function loadCommonsImages(place) {
-  const params = new URLSearchParams({
-    action: 'query',
-    generator: 'search',
-    gsrsearch: `filetype:bitmap "${place.name}" ${place.district} Uttarakhand`,
-    gsrnamespace: '6',
-    gsrlimit: '20',
-    prop: 'imageinfo',
-    iiprop: 'url|extmetadata',
-    iiurlwidth: '1200',
-    format: 'json',
-    origin: '*',
-  })
-  const response = await fetch(`${COMMONS_API_URL}?${params}`, {
-    signal: AbortSignal.timeout(12000),
-    headers: { Accept: 'application/json', 'User-Agent': 'DevbhoomiYatra/1.0 (destination photo gallery)' },
-  })
-  if (!response.ok) throw new Error(`Wikimedia Commons returned ${response.status}`)
-  const payload = await response.json()
-  if (payload.error) throw new Error('Wikimedia Commons could not return images')
-  const pages = Object.values(payload.query?.pages || {})
-
+function mapCommonsImages(pages, isRelevant) {
   return pages.flatMap(page => {
     const image = page.imageinfo?.[0]
     const metadata = image?.extmetadata || {}
     if (!image?.thumburl || !image?.descriptionurl || !metadata.LicenseShortName?.value || !metadata.LicenseUrl?.value) return []
-    const searchableText = `${page.title} ${metadata.ObjectName?.value || ''} ${metadata.ImageDescription?.value || ''}`
+    const searchableText = `${page.title} ${metadata.ObjectName?.value || ''} ${metadata.ImageDescription?.value || ''} ${metadata.Categories?.value || ''}`
       .replace(/<[^>]*>/g, ' ').toLocaleLowerCase()
-    if (!searchableText.includes(place.name.toLocaleLowerCase())) return []
+    if (!isRelevant(searchableText)) return []
     let imageUrl
     let descriptionUrl
     let licenseUrl
@@ -564,7 +548,7 @@ async function loadCommonsImages(place) {
     } catch {
       return []
     }
-    if (imageUrl.protocol !== 'https:' || imageUrl.hostname !== 'upload.wikimedia.org'
+    if (imageUrl.protocol !== 'https:' || !['upload.wikimedia.org', 'thumb.wikimedia.org'].includes(imageUrl.hostname)
       || descriptionUrl.protocol !== 'https:' || descriptionUrl.hostname !== 'commons.wikimedia.org'
       || !['https:', 'http:'].includes(licenseUrl.protocol)) return []
     return [{
@@ -580,21 +564,54 @@ async function loadCommonsImages(place) {
   }).slice(0, 8)
 }
 
-async function getCachedCommonsImages(place) {
- const cached = commonsCache.get(place.id)
- if (cached && cached.expiresAt > Date.now()) return cached.data
- if (cached?.pending) return cached.pending
+async function searchCommonsImages(search, isRelevant) {
+  const params = new URLSearchParams({
+    action: 'query',
+    generator: 'search',
+    gsrsearch: search,
+    gsrnamespace: '6',
+    gsrlimit: '20',
+    prop: 'imageinfo',
+    iiprop: 'url|extmetadata',
+    iiurlwidth: '1200',
+    format: 'json',
+    origin: '*',
+  })
+  const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+    signal: AbortSignal.timeout(12000),
+    headers: { Accept: 'application/json', 'User-Agent': 'DevbhoomiYatra/1.0 (destination photo gallery)' },
+  })
+  if (!response.ok) throw new Error(`Wikimedia Commons returned ${response.status}`)
+  const payload = await response.json()
+  if (payload.error) throw new Error('Wikimedia Commons could not return images')
+  return mapCommonsImages(Object.values(payload.query?.pages || {}), isRelevant)
+}
 
- const entry = { expiresAt: 0, data: null, pending: null }
- entry.pending = loadCommonsImages(place).then(images => {
+async function loadCommonsScenery(district) {
+  const naturalFeatures = /\b(landscapes?|scenery|nature|lakes?|forests?|hills?|mountains?|rivers?|waterfalls?|valleys?|parks?|glaciers?|bugyals?|peaks?|himalayas?|meadows?|clouds?|view|viewpoints?|waterbody|water\s+body|greenery)\b/
+  const builtOrNonScenic = /\b(police|building|buildings|hotel|resort|cottage|portrait|personnel|stadium|airport|interior|road sign|night|lights?|urban|cityscape|street)\b/
+  const search = async query => searchCommonsImages(query, searchableText =>
+    naturalFeatures.test(searchableText) && !builtOrNonScenic.test(searchableText))
+  const districtImages = await search(`filetype:bitmap ${district} Uttarakhand nature`)
+  if (districtImages.length) return districtImages
+  return search('filetype:bitmap Uttarakhand landscape nature hills')
+}
+
+async function getCachedCommonsImages(key, loader) {
+  const cached = commonsCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.data
+  if (cached?.pending) return cached.pending
+
+  const entry = { expiresAt: 0, data: null, pending: null }
+  entry.pending = loader().then(images => {
     entry.data = { images, source: 'https://commons.wikimedia.org/', updatedAt: new Date().toISOString() }
     entry.expiresAt = Date.now() + COMMONS_CACHE_TTL_MS
     return entry.data
   }).catch(error => {
-    commonsCache.delete(place.id)
+    commonsCache.delete(key)
     throw error
   }).finally(() => { entry.pending = null })
-  commonsCache.set(place.id, entry)
+  commonsCache.set(key, entry)
   return entry.pending
 }
 
@@ -608,13 +625,13 @@ app.get('/api/place-thumbnails', asyncHandler(async (req, res) => {
 
   const thumbnails = {}
   let nextIndex = 0
-  const workers = Array.from({ length: Math.min(4, requestedPlaces.length) }, async () => {
+  const workers = Array.from({ length: Math.min(2, requestedPlaces.length) }, async () => {
     while (nextIndex < requestedPlaces.length) {
       const index = nextIndex++
       const place = requestedPlaces[index]
       try {
-        const result = await getCachedCommonsImages(place)
-        thumbnails[place.id] = { image: result.images[0] || null }
+        const result = await getCachedCommonsImages(`district:${place.district}`, () => loadCommonsScenery(place.district))
+        thumbnails[place.id] = { image: result.images[0] || null, illustrative: true }
       } catch (error) {
         thumbnails[place.id] = { error: error.message }
       }
@@ -627,7 +644,7 @@ app.get('/api/place-thumbnails', asyncHandler(async (req, res) => {
 app.get('/api/places/:id/images', asyncHandler(async (req, res) => {
   const place = places.find(candidate => candidate.id === req.params.id)
   if (!place) return res.status(404).json({ error: 'Destination not found' })
-  res.json(await getCachedCommonsImages(place))
+  res.json(await getCachedCommonsImages(`district:${place.district}`, () => loadCommonsScenery(place.district)))
 }))
 
 app.post('/api/recommendation-feedback', asyncHandler(async (req, res) => {

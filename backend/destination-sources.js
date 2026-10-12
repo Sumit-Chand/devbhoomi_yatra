@@ -27,8 +27,126 @@ export const destinationSources = {
   },
 }
 
+const districtPlaceReferences = {
+  Almora: {
+    organization: 'Almora District Administration',
+    url: 'https://almora.nic.in/places-of-interest/',
+    ids: [
+      'lala-bazaar-almora', 'bright-end-corner', 'chitai-golu-devta', 'nanda-devi-temple-almora',
+      'naithan-devi-temple', 'kumaon-regimental-museum', 'chaubatia-gardens', 'ranikhet-golf-course',
+      'jhula-devi-temple', 'ram-mandir-ranikhet', 'herakhan-temple', 'kalika-temple-ranikhet',
+      'binsar-mahadev-temple', 'manila-devi-temple', 'shitla-khet', 'syahi-devi-temple',
+      'cranks-ridge', 'gb-pant-memorial-khunt',
+    ],
+  },
+  'Almora Jageshwar complex': {
+    organization: 'Incredible India: Jageshwar Dham',
+    url: 'https://www.incredibleindia.gov.in/en/uttarakhand/almora/jageshwar-dham',
+    ids: [],
+    additionalIds: [
+      'dandeshwar-temple', 'nav-durga-temple-jageshwar', 'chandika-temple-jageshwar',
+      'pushti-mata-temple', 'kuber-temple-jageshwar', 'lakulisha-temple', 'tandeswar-temple',
+      'jagannath-temple-jageshwar', 'dakshin-mukhi-hanuman-neelkanth',
+      'surya-temple-jageshwar', 'navagraha-temple-jageshwar', 'tarkeshwar-temple-jageshwar',
+      'batuk-bhairav-temple-jageshwar', 'brahm-kund-jageshwar', 'asi-museum-jageshwar',
+    ],
+  },
+  Bageshwar: {
+    organization: 'Bageshwar District Administration and Incredible India',
+    url: 'https://bageshwar.nic.in/tourist-places/',
+    ids: [
+      'anasakti-ashram', 'sumitranandan-pant-museum', 'lakshmi-ashram-kausani', 'kausani-tea-estate',
+      'starscapes-kausani', 'kausani-planetarium', 'pinnath-temple', 'rudradhari-falls-caves',
+      'kausani-shawl-factory', 'baijnath-lake', 'gauri-udiyar-cave-temple',
+      'suraj-kund-bageshwar', 'agni-kund-bageshwar', 'bhileshwar-mountain', 'nileshwar-mountain',
+    ],
+  },
+  Champawat: {
+    organization: 'Champawat District Administration',
+    url: 'https://champawat.nic.in/places-of-interest/',
+    ids: [
+      'nagnath-temple-champawat', 'ek-hathiya-naula', 'kranteshwar-mahadev',
+      'reetha-sahib', 'vanasur-fort', 'chaumu-shrine-pancheshwar', 'lohaghat-valley',
+    ],
+  },
+  Pithoragarh: {
+    organization: 'Incredible India',
+    url: 'https://www.incredibleindia.gov.in/en/uttarakhand/pithoragarh',
+    ids: [
+      'nakuleshwar-temple', 'thalkedar-temple', 'kapileshwar-cave-temple', 'dhwaj-temple',
+      'kamakhya-temple-pithoragarh', 'chandak-viewpoint', 'mostamanu-temple',
+      'pashupatinath-temple-chandak', 'nagmandir-berinag', 'chaukori-tea-gardens',
+      'didihat', 'adi-kailash', 'parvati-sarovar', 'gauri-kund-adi-kailash',
+      'om-parvat', 'sarmoli', 'ralam-glacier-trek', 'milam-glacier-trek',
+      'purana-bazar-pithoragarh', 'naya-bazar-pithoragarh', 'simalgair-pithoragarh',
+      'kumdar-hill-provisional',
+    ],
+  },
+  Chamoli: {
+    organization: 'Chamoli District Administration and Incredible India',
+    url: 'https://chamoli.gov.in/tourist-places/',
+    ids: [
+      'tapt-kund', 'vyas-gufa', 'bhim-pul', 'saraswati-river-mana', 'hemkund-lake',
+      'nanda-devi-national-park', 'roopkund-lake', 'kuari-pass', 'gopinath-temple',
+      'vaitarni-kund', 'oak-view-gopeshwar',
+    ],
+  },
+  'Pauri Garhwal': {
+    organization: 'Secondary place references (verify locally)',
+    url: 'https://en.wikipedia.org/wiki/Pauri_Garhwal_district',
+    ids: [
+      'lakshmi-narayan-temple-pauri', 'kyunkaleshwar-mahadev', 'nagdevta-temple-pauri',
+      'laxman-temple-pauri', 'ulkhagarhi', 'jhandi-dhar-pauri', 'ransi-stadium',
+      'danda-nagraja-temple', 'pipli-gurdwara', 'nadbudh-bhairava-temple', 'kanvashram',
+      'siddhabali-temple', 'durga-devi-temple-kotdwar', 'st-joseph-church-kotdwar',
+      'shoonya-shikhar-ashram', 'charekh-danda', 'garhwal-rifles-museum',
+      'lansdowne-war-memorial',
+    ],
+  },
+  Rudraprayag: {
+    organization: 'Rudraprayag District Administration',
+    url: 'https://rudraprayag.gov.in/tourist-place/guptkashi/',
+    ids: [
+      'ardhanareshwar-temple-guptkashi', 'manikarnik-kund-guptkashi',
+    ],
+  },
+  'Rudraprayag secondary references': {
+    organization: 'Secondary place references (verify locally)',
+    url: 'https://en.wikipedia.org/wiki/Rudraprayag_district',
+    ids: [
+      'kartik-swami-temple', 'koteshwar-mahadev-rudraprayag',
+      'tungeshwar-mahadev-phalasi', 'basukedar-temple', 'gaurikund',
+    ],
+  },
+  'Tehri Garhwal': {
+    organization: 'Tehri Garhwal District Administration',
+    url: 'https://tehri.nic.in/tourist-places/',
+    ids: [
+      'kunjapuri-temple', 'surkanda-devi-temple', 'chandrabadni-temple',
+      'dobra-chanti-bridge', 'muni-ki-reti', 'raghunathji-temple-devprayag',
+      'brahm-kund-devprayag', 'vasishta-kund-devprayag', 'baital-kund-devprayag',
+      'surya-kund-devprayag', 'indradyumna-tirth-devprayag', 'pushyamal-tirth-devprayag',
+      'varah-tirth-devprayag', 'pushpavatika-devprayag', 'baitalshila-devprayag',
+      'varahishila-devprayag', 'bhairava-shrine-devprayag', 'bhushandi-shrine-devprayag',
+      'durga-shrine-devprayag', 'vishveshvara-shrine-devprayag',
+      'bharata-temple-devprayag', 'dasharathachal-peak', 'dashrathshila-devprayag',
+    ],
+  },
+}
+
+for (const { organization, url, ids = [], additionalIds = [] } of Object.values(districtPlaceReferences)) {
+  for (const id of [...ids, ...additionalIds]) {
+    destinationSources[id] = {
+      organization,
+      url,
+      checkedAt,
+      verifiedFields: ['name', 'district'],
+    }
+  }
+}
+
 export const destinationDataNotes = {
   schemaVersion: 1,
   operationalStatus: 'unknown',
-  note: 'Official source pages describe access and destination facts; they are not a live open/closed feed. Verify terms before bulk republication.',
+  note: 'Linked district or tourism pages support the named place and district where listed; unreferenced coordinates, altitudes, seasons and route tips are approximate. Sources are not a live open/closed feed. Confirm access locally and verify terms before reuse.',
 }
