@@ -55,6 +55,8 @@ flowchart LR
 - The trip recommender matches destination tags and listed best months. It is not a trained machine-learning model.
 - User and report records persist only when `MONGODB_URI` is configured. Otherwise, the backend uses temporary memory and data is lost when it restarts.
 
+
+## Demo Site - https://devbhoomi-yatra-1.onrender.com/
 ## Keep secrets safe
 
 Store private values in `backend/.env`. Never commit `.env`, API keys, email credentials, or database connection strings.
