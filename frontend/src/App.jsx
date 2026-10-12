@@ -8,6 +8,7 @@ import Planner from './pages/Planner.jsx'
 import Login from './pages/Login.jsx'
 import VerifyAdmin from './pages/VerifyAdmin.jsx'
 import { useAuth } from './auth.jsx'
+import { Mountain } from 'lucide-react'
 
 const link = ({ isActive }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-marigold text-ink' : 'text-snow hover:bg-white/10'}`
@@ -24,7 +25,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col">
       <header className="site-header">
         <nav className="site-nav" aria-label="Main">
-          <Link to="/" className="site-brand"><span className="site-brand__symbol" aria-hidden="true">ॐ</span><span>Devbhoomi Yatra</span></Link>
+          <Link to="/" className="site-brand"><span className="site-brand__symbol" aria-hidden="true"><Mountain size={19} strokeWidth={1.8} /></span><span>Devbhoomi Yatra</span></Link>
           <NavLink to="/destinations" className={link}>Destinations</NavLink>
           <NavLink to="/alerts" className={link}>Alerts</NavLink>
           <NavLink to="/planner" className={link}>Trip planner</NavLink>
@@ -52,9 +53,6 @@ export default function App() {
             </div>} />
         </Routes>
       </main>
-      <footer className="site-footer">
-        <p>Destination details are curated and approximate. Weather forecasts are model output, not official warnings; confirm road, weather and permit details with local authorities before you travel.</p>
-      </footer>
     </div>
   )
 }
