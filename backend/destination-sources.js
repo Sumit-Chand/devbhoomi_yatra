@@ -89,6 +89,19 @@ const districtPlaceReferences = {
       'tapt-kund', 'vyas-gufa', 'bhim-pul', 'saraswati-river-mana', 'hemkund-lake',
       'nanda-devi-national-park', 'roopkund-lake', 'kuari-pass', 'gopinath-temple',
       'vaitarni-kund', 'oak-view-gopeshwar',
+      'vishnuprayag', 'nandprayag', 'karnaprayag-confluence', 'bedni-bugyal',
+      'anusuya-devi-temple', 'narsingh-temple-joshimath', 'shankaracharya-math-joshimath',
+      'bhavishya-badri', 'yogadhyan-badri', 'vriddha-badri', 'aali-bugyal',
+      'bairaskund-temple',
+    ],
+  },
+  'Chamoli secondary references': {
+    organization: 'Secondary place references (verify locally)',
+    url: 'https://en.wikipedia.org/wiki/Chamoli_district',
+    ids: [
+      'nagnath-dewar-walla', 'satopanth-tal-provisional', 'ardha-badri', 'dhyan-badri',
+      'nauti-nanda-devi-shrine', 'nanda-devi-bedni-shrine', 'latu-devta-temple-bedni',
+      'basdeo-temple-joshimath', 'chakratirtha',
     ],
   },
   'Pauri Garhwal': {
@@ -103,12 +116,31 @@ const districtPlaceReferences = {
       'lansdowne-war-memorial',
     ],
   },
+  'Pauri Garhwal District Administration': {
+    organization: 'Pauri Garhwal District Administration',
+    url: 'https://pauri.nic.in/tourist-places/',
+    ids: [
+      'ekeshwar-mahadev', 'kamleshwar-mahadev-srinagar', 'nageshwar-mahadev-srinagar',
+      'katkeshwar-mahadev', 'ghandiyal-temple-burhabarsar', 'koteshwar-mahadev-pauri',
+      'dhari-devi-temple', 'doodhatoli', 'brahmadungi-memorial', 'tara-kund-pauri',
+      'bharat-nagar-pauri', 'kalagarh-ramganga-viewpoint', 'devalgarh', 'rajat-jayanti-park',
+    ],
+  },
   Rudraprayag: {
     organization: 'Rudraprayag District Administration',
     url: 'https://rudraprayag.gov.in/tourist-place/guptkashi/',
     ids: [
       'ardhanareshwar-temple-guptkashi', 'manikarnik-kund-guptkashi',
+      'agasteshwar-temple-augustmuni', 'shiva-temple-rudraprayag', 'jagdamba-temple-rudraprayag',
+      'ramgarh-ruins-ronitpur', 'sonprayag-confluence', 'gauri-devi-temple-gaurikund',
+      'usha-temple-ukhimath', 'aniruddha-temple-ukhimath', 'bhairav-temple-kedarnath',
+      'adi-shankaracharya-samadhi-kedarnath', 'gandhi-sarovar', 'vasuki-tal-rudraprayag',
     ],
+  },
+  'Rudraprayag provisional reference': {
+    organization: 'Secondary place references (verify locally)',
+    url: 'https://en.wikipedia.org/wiki/Rudraprayag_district',
+    ids: ['nala-stupa-provisional'],
   },
   'Rudraprayag secondary references': {
     organization: 'Secondary place references (verify locally)',
@@ -130,6 +162,8 @@ const districtPlaceReferences = {
       'varahishila-devprayag', 'bhairava-shrine-devprayag', 'bhushandi-shrine-devprayag',
       'durga-shrine-devprayag', 'vishveshvara-shrine-devprayag',
       'bharata-temple-devprayag', 'dasharathachal-peak', 'dashrathshila-devprayag',
+      'sem-mukhem-temple', 'panwali-kantha', 'masar-tal', 'narendranagar',
+      'shanta-stream-devprayag',
     ],
   },
   Dehradun: {

@@ -355,7 +355,7 @@ export default function Destinations() {
                         title={place.name}
                         image={thumbnails[place.id]?.image}
                         loading={thumbnails[place.id]?.loading}
-                        subtitle={`Nature scenery · ${place.altitude.toLocaleString('en-IN')} m`}
+                        subtitle={`Place photo · ${place.altitude.toLocaleString('en-IN')} m`}
                         label={`Open details for ${place.name}`}
                         onClick={() => openPlace(place)}
                       />
@@ -423,7 +423,7 @@ export default function Destinations() {
             <div className="mt-4 grid gap-6 md:grid-cols-[2fr,1fr]">
               <section aria-labelledby="place-photos-heading">
                 <h3 id="place-photos-heading" className="text-lg font-semibold text-pine">Photos</h3>
-                <p className="text-sm text-ink/70">Illustrative nature and scenery photos are from Wikimedia Commons and may show the wider district rather than this exact place. Check each file’s page for its subject, attribution and reuse conditions.</p>
+                <p className="text-sm text-ink/70">Each search uses this place’s name and district and prefers outdoor scenery. Commons descriptions can be incomplete, so check the file page to confirm what the photo shows and review its attribution and reuse terms.</p>
                 {gallery.loading && <p className="mt-4" role="status">Loading destination photos</p>}
                 {gallery.error && <p className="mt-4 text-red-800" role="alert">Could not load photos: {gallery.error}</p>}
                 {!gallery.loading && !gallery.error && gallery.images.length === 0 && (

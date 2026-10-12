@@ -537,7 +537,9 @@ function mapCommonsImages(pages, isRelevant) {
     if (!image?.thumburl || !image?.descriptionurl || !metadata.LicenseShortName?.value || !metadata.LicenseUrl?.value) return []
     const searchableText = `${page.title} ${metadata.ObjectName?.value || ''} ${metadata.ImageDescription?.value || ''} ${metadata.Categories?.value || ''}`
       .replace(/<[^>]*>/g, ' ').toLocaleLowerCase()
-    if (!isRelevant(searchableText)) return []
+    const subjectText = `${page.title} ${metadata.ObjectName?.value || ''}`
+      .replace(/<[^>]*>/g, ' ').toLocaleLowerCase()
+    if (!isRelevant(searchableText, subjectText)) return []
     let imageUrl
     let descriptionUrl
     let licenseUrl
@@ -587,14 +589,23 @@ async function searchCommonsImages(search, isRelevant) {
   return mapCommonsImages(Object.values(payload.query?.pages || {}), isRelevant)
 }
 
-async function loadCommonsScenery(district) {
-  const naturalFeatures = /\b(landscapes?|scenery|nature|lakes?|forests?|hills?|mountains?|rivers?|waterfalls?|valleys?|parks?|glaciers?|bugyals?|peaks?|himalayas?|meadows?|clouds?|view|viewpoints?|waterbody|water\s+body|greenery)\b/
-  const builtOrNonScenic = /\b(police|building|buildings|hotel|resort|cottage|portrait|personnel|stadium|airport|interior|road sign|night|lights?|urban|cityscape|street)\b/
-  const search = async query => searchCommonsImages(query, searchableText =>
-    naturalFeatures.test(searchableText) && !builtOrNonScenic.test(searchableText))
-  const districtImages = await search(`filetype:bitmap ${district} Uttarakhand nature`)
-  if (districtImages.length) return districtImages
-  return search('filetype:bitmap Uttarakhand landscape nature hills')
+async function loadCommonsScenery(place) {
+  const outdoorFeatures = /\b(landscapes?|scenery|nature|lakes?|forests?|hills?|mountains?|rivers?|waterfalls?|valleys?|parks?|glaciers?|bugyals?|peaks?|himalayas?|meadows?|clouds?|view|viewpoints?|waterbody|water\s+body|greenery|temples?|shrines?|forts?|bridges?|villages?|confluences?|gardens?|sanctuaries?)\b/
+  const builtOrNonScenic = /\b(police|hotel|resort|cottage|portrait|personnel|stadium|airport|interior|road sign|night|lights?|urban|cityscape|street)\b/
+  const excludedPlaceWords = new Set(['and', 'the', 'for', 'from', 'place', 'temple', 'trek', 'viewpoint', 'district', 'area', 'lake', 'valley', 'meadow', 'bugyal', 'falls', 'waterfall', 'village', 'town'])
+  const placeWords = `${place.name} ${place.id}`
+    .toLocaleLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(word => word.length > 2 && !excludedPlaceWords.has(word))
+  const isPlacePhoto = (searchableText, subjectText) => {
+    const subjectWords = new Set(subjectText.split(/[^a-z0-9]+/).filter(Boolean))
+    return placeWords.some(word => subjectWords.has(word))
+    && outdoorFeatures.test(searchableText)
+    && !builtOrNonScenic.test(searchableText)
+  }
+  const exactMatch = await searchCommonsImages(`filetype:bitmap "${place.name}" ${place.district} Uttarakhand`, isPlacePhoto)
+  if (exactMatch.length) return exactMatch
+  return searchCommonsImages(`filetype:bitmap ${place.name} ${place.district} nature landscape`, isPlacePhoto)
 }
 
 async function getCachedCommonsImages(key, loader) {
@@ -630,7 +641,7 @@ app.get('/api/place-thumbnails', asyncHandler(async (req, res) => {
       const index = nextIndex++
       const place = requestedPlaces[index]
       try {
-        const result = await getCachedCommonsImages(`district:${place.district}`, () => loadCommonsScenery(place.district))
+        const result = await getCachedCommonsImages(`place:${place.id}`, () => loadCommonsScenery(place))
         thumbnails[place.id] = { image: result.images[0] || null, illustrative: true }
       } catch (error) {
         thumbnails[place.id] = { error: error.message }
@@ -644,7 +655,7 @@ app.get('/api/place-thumbnails', asyncHandler(async (req, res) => {
 app.get('/api/places/:id/images', asyncHandler(async (req, res) => {
   const place = places.find(candidate => candidate.id === req.params.id)
   if (!place) return res.status(404).json({ error: 'Destination not found' })
-  res.json(await getCachedCommonsImages(`district:${place.district}`, () => loadCommonsScenery(place.district)))
+  res.json(await getCachedCommonsImages(`place:${place.id}`, () => loadCommonsScenery(place)))
 }))
 
 app.post('/api/recommendation-feedback', asyncHandler(async (req, res) => {
