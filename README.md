@@ -42,6 +42,7 @@ flowchart LR
 ## Destination photos
 
 - Each destination is searched separately using its name and district; the search prefers nature, landscape, and outdoor photos.
+- The home-page Auli mountain photo rotates through its available, credited matches every two minutes. If only one photo is available, it remains in place.
 - A destination does not reuse one district-wide image for every place. If a relevant, attributed match is unavailable, the tile shows a photo-unavailable fallback instead of an unrelated image.
 - Image search uses Wikimedia Commons and caches results for up to six hours. Check each linked file page to confirm the subject, author, and license; Commons metadata is not always complete.
 - Google Maps photos are not scraped. Showing Google Maps/Places photos requires using Google's approved APIs and following their billing, attribution, and display requirements.

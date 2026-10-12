@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../api.js'
 
-const mountainPhoto = {
+const fallbackPhoto = {
   thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Joshimath_auli_Badrinath.jpg',
   pageUrl: 'https://commons.wikimedia.org/wiki/File:Joshimath_auli_Badrinath.jpg',
   artist: 'Bibek Raj Pandeya',
@@ -9,12 +10,23 @@ const mountainPhoto = {
 }
 
 export default function Home() {
-  const { data: coverData } = useApi('/api/place-thumbnails?ids=auli')
-  const cover = coverData?.thumbnails?.auli?.image || mountainPhoto
+  const { data: galleryData } = useApi('/api/places/auli/images')
+  const photos = galleryData?.images?.length ? galleryData.images : [fallbackPhoto]
+  const [photoIndex, setPhotoIndex] = useState(0)
+  const cover = photos[photoIndex % photos.length]
+
+  useEffect(() => {
+    if (photos.length < 2) return undefined
+    const rotation = window.setInterval(() => {
+      setPhotoIndex(current => (current + 1) % photos.length)
+    }, 120_000)
+    return () => window.clearInterval(rotation)
+  }, [photos.length])
 
   return (
     <>
-      <section className="scenic-hero text-snow" style={cover ? { '--hero-image': `url("${cover.thumbnailUrl}")` } : undefined}>
+      <section className="scenic-hero text-snow">
+        <img key={cover.pageUrl} className="scenic-hero__photo" src={cover.thumbnailUrl} alt="" aria-hidden="true" />
         <div className="scenic-hero__inner">
           <span className="scenic-hero__eyebrow">Uttarakhand · Garhwal &amp; Kumaon</span>
           <h1 className="mt-5 max-w-3xl text-5xl font-bold leading-[1.05] sm:text-7xl">Find your stillness in the Himalaya.</h1>
@@ -25,9 +37,8 @@ export default function Home() {
           </div>
         </div>
         <div className="scenic-hero__credit">
-          {cover
-            ? <a href={cover.pageUrl} target="_blank" rel="noreferrer">Photo: {cover.artist} · {cover.license}</a>
-            : <span>Himalayan scenery · photo loading</span>}
+          {photos.length > 1 && <span>Scenery changes every 2 minutes · </span>}
+          <a href={cover.pageUrl} target="_blank" rel="noreferrer">Photo: {cover.artist} · {cover.license}</a>
         </div>
       </section>
       <section className="home-intro">
