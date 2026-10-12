@@ -45,6 +45,12 @@
   background-attachment: scroll, fixed;
 }
 
+.site-main--dashboard {
+  background-image:
+    linear-gradient(rgb(241 246 243 / 36%), rgb(241 246 243 / 44%)),
+    var(--site-background-image);
+}
+
 .site-background-credit {
   position: absolute;
   right: max(1rem, calc((100vw - 76rem) / 2));

@@ -65,7 +65,7 @@ export default function App() {
         </nav>
       </header>
       <main
-        className={`site-main flex-1${background ? ' site-main--scenic' : ''}`}
+        className={`site-main flex-1${background ? ' site-main--scenic' : ''}${pathname === '/dashboard' ? ' site-main--dashboard' : ''}`}
         style={background ? { '--site-background-image': `url("${background.image}")` } : undefined}
       >
         <Routes>

@@ -1,10 +1,7 @@
 import { Link } from 'react-router-dom'
 
 const cover = {
-  thumbnailUrl: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg/1920px-Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg',
-  pageUrl: 'https://commons.wikimedia.org/wiki/File:Panorama_of_Himalayas_from_Ranikhet,_Uttarakhand,_India.jpg',
-  artist: 'Harshit SR / UnpetitproleX',
-  license: 'CC BY-SA 4.0',
+  thumbnailUrl: '/dashboard-mountain.png',
 }
 
 const features = [
@@ -16,8 +13,6 @@ const features = [
     action: 'Explore places',
     image: cover.thumbnailUrl,
     imageAlt: 'Snow-covered Himalayan peaks above the natural ridges of Uttarakhand',
-    artist: cover.artist,
-    pageUrl: cover.pageUrl,
   },
   {
     number: '02',
@@ -57,9 +52,6 @@ export default function Home() {
             <Link to="/alerts" className="hero-action hero-action--secondary">Check travel updates</Link>
           </div>
         </div>
-        <div className="scenic-hero__credit photo-credit">
-          <a href={cover.pageUrl} target="_blank" rel="noreferrer">Photo: {cover.artist} · {cover.license}</a>
-        </div>
       </section>
       <section className="home-intro">
         <p className="home-intro__kicker">A gentler way to travel</p>
@@ -72,7 +64,7 @@ export default function Home() {
             <div className="home-feature__image">
               <img src={feature.image} alt={feature.imageAlt} loading="lazy" decoding="async" />
               <span className="home-feature__number">{feature.number}</span>
-              <a
+              {feature.artist && feature.pageUrl && <a
                 className="home-feature__credit photo-credit"
                 href={feature.pageUrl}
                 target="_blank"
@@ -81,7 +73,7 @@ export default function Home() {
                 title={`Photo by ${feature.artist} · CC BY-SA 4.0`}
               >
                 Photo: {feature.artist} · CC BY-SA 4.0
-              </a>
+              </a>}
             </div>
             <div className="home-feature__body">
               <h3 className="text-xl font-semibold text-pine">{feature.title}</h3>
