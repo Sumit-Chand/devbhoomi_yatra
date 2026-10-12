@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api.js'
 import { categories } from '../data.js'
+import TravelQuote from '../TravelQuote.jsx'
 
 export default function Report() {
   const [form, setForm] = useState({ category: categories[0], description: '', location: '' })
@@ -24,6 +25,7 @@ export default function Report() {
     <div className="max-w-xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-pine">Report an issue</h1>
       <p className="mt-1 text-ink/70">Tell us about a road, trail or waste problem. This is a demo and reports are not sent to authorities yet.</p>
+      <TravelQuote>Caring for a place begins with noticing what it needs.</TravelQuote>
       <form onSubmit={submit} className="mt-6 space-y-4">
         <label className="block font-medium">Type of issue
           <select className={field} value={form.category} onChange={set('category')}>

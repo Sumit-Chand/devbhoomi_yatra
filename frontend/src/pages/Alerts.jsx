@@ -1,4 +1,5 @@
 import { useApi } from '../api.js'
+import TravelQuote from '../TravelQuote.jsx'
 
 const severityTone = {
   Extreme: 'bg-red-100 text-red-900',
@@ -30,6 +31,7 @@ export default function Alerts() {
     <div className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-pine">Live travel updates</h1>
       <p className="mt-1 text-ink/70">Official public alerts and current model forecasts. Forecasts are not official warnings, and this page does not report live road closures.</p>
+      <TravelQuote>The wisest mountain journey begins by checking the sky.</TravelQuote>
       {loading && <p className="mt-6">Loading live updates</p>}
       {error && <p className="mt-6 text-red-800">Could not load updates: {error}</p>}
 

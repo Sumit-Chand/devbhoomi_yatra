@@ -1,32 +1,53 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useApi } from '../api.js'
 
-const fallbackPhoto = {
-  thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Joshimath_auli_Badrinath.jpg',
-  pageUrl: 'https://commons.wikimedia.org/wiki/File:Joshimath_auli_Badrinath.jpg',
-  artist: 'Bibek Raj Pandeya',
+const cover = {
+  thumbnailUrl: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg/1920px-Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg',
+  pageUrl: 'https://commons.wikimedia.org/wiki/File:Panorama_of_Himalayas_from_Ranikhet,_Uttarakhand,_India.jpg',
+  artist: 'Harshit SR / UnpetitproleX',
   license: 'CC BY-SA 4.0',
 }
 
+const features = [
+  {
+    number: '01',
+    title: 'Choose your path',
+    description: 'Explore sacred places, forest walks and high Himalayan views across all 13 districts.',
+    path: '/destinations',
+    action: 'Explore places',
+    image: cover.thumbnailUrl,
+    imageAlt: 'Snow-covered Himalayan peaks above the natural ridges of Uttarakhand',
+    artist: cover.artist,
+    pageUrl: cover.pageUrl,
+  },
+  {
+    number: '02',
+    title: 'Travel mindfully',
+    description: 'Check district weather and public alerts before setting out into the mountains.',
+    path: '/alerts',
+    action: 'View travel updates',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Symmetrical_Himalayas.jpg',
+    imageAlt: 'Himalayan peaks reflected in a quiet mountain lake at dusk',
+    artist: 'Shubhang99',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Symmetrical_Himalayas.jpg',
+  },
+  {
+    number: '03',
+    title: 'Care for the hills',
+    description: 'Share a road, trail or cleanliness concern to help fellow travellers and local communities.',
+    path: '/report',
+    action: 'Report an issue',
+    image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Valley_of_Flowers_National_Park_05.JPG/1280px-Valley_of_Flowers_National_Park_05.JPG',
+    imageAlt: 'A clear stream winding through the green landscape of the Valley of Flowers',
+    artist: 'Guptaele',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Valley_of_Flowers_National_Park_05.JPG',
+  },
+]
+
 export default function Home() {
-  const { data: galleryData } = useApi('/api/places/auli/images')
-  const photos = galleryData?.images?.length ? galleryData.images : [fallbackPhoto]
-  const [photoIndex, setPhotoIndex] = useState(0)
-  const cover = photos[photoIndex % photos.length]
-
-  useEffect(() => {
-    if (photos.length < 2) return undefined
-    const rotation = window.setInterval(() => {
-      setPhotoIndex(current => (current + 1) % photos.length)
-    }, 120_000)
-    return () => window.clearInterval(rotation)
-  }, [photos.length])
-
   return (
     <>
       <section className="scenic-hero text-snow">
-        <img key={cover.pageUrl} className="scenic-hero__photo" src={cover.thumbnailUrl} alt="" aria-hidden="true" />
+        <img className="scenic-hero__photo" src={cover.thumbnailUrl} alt="" aria-hidden="true" />
         <div className="scenic-hero__inner">
           <span className="scenic-hero__eyebrow">Uttarakhand · Garhwal &amp; Kumaon</span>
           <h1 className="mt-5 max-w-3xl text-5xl font-bold leading-[1.05] sm:text-7xl">Find your stillness in the Himalaya.</h1>
@@ -37,7 +58,6 @@ export default function Home() {
           </div>
         </div>
         <div className="scenic-hero__credit">
-          {photos.length > 1 && <span>Scenery changes every 2 minutes · </span>}
           <a href={cover.pageUrl} target="_blank" rel="noreferrer">Photo: {cover.artist} · {cover.license}</a>
         </div>
       </section>
@@ -47,18 +67,29 @@ export default function Home() {
         <p className="mx-auto mt-3 max-w-2xl text-ink/70">Plan thoughtfully, explore respectfully, and let the mountains set the pace.</p>
       </section>
       <section className="home-features">
-        {[
-          ['01', 'Choose your path', 'Explore sacred places, forest walks and high Himalayan views across all 13 districts.', '/destinations', 'Explore places'],
-          ['02', 'Travel mindfully', 'Check district weather and public alerts before setting out into the mountains.', '/alerts', 'View travel updates'],
-          ['03', 'Care for the hills', 'Share a road, trail or cleanliness concern to help fellow travellers and local communities.', '/report', 'Report an issue'],
-        ].map(([number, title, description, path, action]) => (
-          <article key={number} className="home-feature">
-            <span className="home-feature__number">{number}</span>
-            <h3 className="mt-5 text-xl font-semibold text-pine">{title}</h3>
-            <p className="mt-2 leading-relaxed text-ink/70">{description}</p>
-            <Link className="home-feature__link" to={path}>
-              {action} <span aria-hidden="true">→</span>
+        {features.map(feature => (
+          <article key={feature.number} className="home-feature">
+            <div className="home-feature__image">
+              <img src={feature.image} alt={feature.imageAlt} loading="lazy" decoding="async" />
+              <span className="home-feature__number">{feature.number}</span>
+              <a
+                className="home-feature__credit"
+                href={feature.pageUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Photo by ${feature.artist}, licensed CC BY-SA 4.0`}
+                title={`Photo by ${feature.artist} · CC BY-SA 4.0`}
+              >
+                Photo: {feature.artist} · CC BY-SA 4.0
+              </a>
+            </div>
+            <div className="home-feature__body">
+              <h3 className="text-xl font-semibold text-pine">{feature.title}</h3>
+              <p className="mt-2 leading-relaxed text-ink/70">{feature.description}</p>
+              <Link className="home-feature__link" to={feature.path}>
+                {feature.action} <span aria-hidden="true">→</span>
             </Link>
+            </div>
           </article>
         ))}
       </section>

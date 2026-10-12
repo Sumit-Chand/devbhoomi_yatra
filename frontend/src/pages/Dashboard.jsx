@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { useApi } from '../api.js'
+import TravelQuote from '../TravelQuote.jsx'
 
 const COLORS = ['#1F3D36', '#E0A030', '#7FA6A0', '#B5533C']
 
@@ -9,6 +10,7 @@ export default function Dashboard() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-pine">Reports dashboard</h1>
+      <TravelQuote>Small acts of care add up to a healthier mountain home.</TravelQuote>
       {loading && <p className="mt-6">Loading</p>}
       {error && <p className="mt-6 text-red-800">Could not load stats: {error}</p>}
       {data && data.total === 0 && (

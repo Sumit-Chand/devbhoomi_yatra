@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, useApi } from '../api.js'
+import TravelQuote from '../TravelQuote.jsx'
 
 const interests = [
   ['trek', 'Trekking'],
@@ -243,6 +244,7 @@ export default function Destinations() {
     <div className="max-w-5xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-pine">Destinations</h1>
       <p className="mt-1 text-ink/70">Curated destination information across Uttarakhand. Altitudes, seasons and highlights are approximate; confirm local access, permits and conditions before travel.</p>
+      <TravelQuote>Every trail is an invitation to look closer, and leave lighter.</TravelQuote>
       <details className="mt-6 rounded-lg border border-pine/15 bg-glacier/40 p-5">
         <summary className="cursor-pointer font-semibold text-pine">Optional trip recommender</summary>
       <section className="mt-4" aria-labelledby="recommendations-heading">

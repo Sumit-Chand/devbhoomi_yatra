@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api.js'
+import TravelQuote from '../TravelQuote.jsx'
 
 const toInput = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 const today = toInput(new Date())
@@ -23,6 +24,7 @@ export default function Planner() {
     <div className="max-w-2xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-pine">Trip planner</h1>
       <p className="mt-1 text-ink/70">Pick your dates and interests. We choose places that suit the season and show the next stop on the way.</p>
+      <TravelQuote>A good itinerary leaves room for the unexpected view.</TravelQuote>
       <form onSubmit={submit} className="mt-6 grid gap-4 sm:grid-cols-2">
         <label className="block font-medium">Start date
           <input type="date" min={today} className={field} value={f.startDate} onChange={set('startDate')} required />
