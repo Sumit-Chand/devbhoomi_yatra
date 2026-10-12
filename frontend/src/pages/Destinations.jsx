@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useApi } from '../api.js'
+import { api, useApi } from '../api.js'
 
 const interests = [
   ['trek', 'Trekking'],
@@ -16,12 +16,16 @@ const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 export default function Destinations() {
   const { loading, error, data } = useApi('/api/places')
+  const { data: feedbackData } = useApi('/api/recommendation-feedback/summary')
   const [district, setDistrict] = useState('All')
   const [region, setRegion] = useState('Any')
   const [month, setMonth] = useState(String(new Date().getMonth() + 1))
   const [selectedInterests, setSelectedInterests] = useState([])
+  const [ratings, setRatings] = useState({})
+  const [feedbackState, setFeedbackState] = useState({ busyId: '', ratedIds: [], message: '', error: '' })
   const all = data?.places || []
   const districts = ['All', ...[...new Set(all.map(p => p.district))].sort()]
+  const ratingSummary = new Map((feedbackData?.ratings || []).map(summary => [summary.destinationId, summary]))
   const list = all.filter(p => district === 'All' || p.district === district)
   const recommendations = all
     .filter(place => region === 'Any' || place.region === region)
@@ -38,6 +42,30 @@ export default function Destinations() {
     setSelectedInterests(current => current.includes(interest)
       ? current.filter(value => value !== interest)
       : [...current, interest])
+  }
+
+  async function rateRecommendation(place, rating) {
+    setFeedbackState(current => ({ ...current, busyId: place.id, message: '', error: '' }))
+    try {
+      await api('/api/recommendation-feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          destinationId: place.id,
+          rating,
+          region,
+          month: Number(month),
+          interests: selectedInterests,
+        }),
+      }, { includeAuth: false })
+      setFeedbackState(current => ({
+        ...current,
+        busyId: '',
+        ratedIds: [...current.ratedIds, place.id],
+        message: 'Thanks. Your anonymous rating was saved.',
+      }))
+    } catch (requestError) {
+      setFeedbackState(current => ({ ...current, busyId: '', error: requestError.message }))
+    }
   }
 
   return (
@@ -98,10 +126,39 @@ export default function Destinations() {
                   {place.matchedInterests.length > 0 && `Matches: ${place.matchedInterests.map(key => interests.find(([value]) => value === key)?.[1]).join(', ')}.`}
                   {place.inSeason ? ' Listed as a best month to visit.' : ' Outside its listed best months; check local conditions.'}
                 </p>
+                {ratingSummary.has(place.id) && (
+                  <p className="mt-2 text-sm text-ink/70">
+                    Visitor suggestion rating: {ratingSummary.get(place.id).averageRating}/5
+                    {' · '}{ratingSummary.get(place.id).count} anonymous ratings
+                  </p>
+                )}
+                {feedbackState.ratedIds.includes(place.id)
+                  ? <p role="status" className="mt-3 text-sm text-pine">{feedbackState.message}</p>
+                  : (
+                    <fieldset className="mt-3" disabled={feedbackState.busyId === place.id}>
+                      <legend className="text-sm font-medium">How useful is this suggestion?</legend>
+                      <div className="mt-1 flex gap-2">
+                        {[1, 2, 3, 4, 5].map(rating => (
+                          <button
+                            key={rating}
+                            type="button"
+                            onClick={() => rateRecommendation(place, rating)}
+                            aria-label={`${rating} out of 5`}
+                            className="rounded border border-pine/30 bg-white px-2 py-1 text-sm hover:bg-glacier disabled:opacity-60"
+                          >
+                            {rating}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+                {feedbackState.busyId === place.id && <p className="mt-2 text-sm" role="status">Saving rating</p>}
+                {feedbackState.error && feedbackState.busyId === '' && !feedbackState.ratedIds.includes(place.id) && <p role="alert" className="mt-2 text-sm text-red-800">{feedbackState.error}</p>}
               </li>
             ))}
           </ol>
         )}
+        <p className="mt-4 text-xs text-ink/70">Feedback is optional. If you submit a rating, the application stores only the destination, rating, selected interests, region, and month—not your name, email, account, or a browser/session ID. The rating request is sent without your login token. Aggregate rating summaries are public.</p>
       </section>
       <label className="mt-5 block font-medium max-w-xs">District
         <select className="mt-1 w-full border border-pine/30 rounded-md px-3 py-2 bg-white" value={district} onChange={e => setDistrict(e.target.value)}>
@@ -120,6 +177,15 @@ export default function Destinations() {
             </div>
             <p className="text-sm text-pine mt-1">{p.district}, {p.region}. Best in {p.season}</p>
             <ul className="mt-3 list-disc pl-5">{p.highlights.map(h => <li key={h}>{h}</li>)}</ul>
+            {p.sources?.map(source => (
+              <p key={source.url} className="mt-3 text-sm text-ink/70">
+                Source for {source.verifiedFields.join(', ')}: <a className="underline" href={source.url} target="_blank" rel="noreferrer">{source.organization}</a>
+                {' · Checked '}{source.checkedAt}
+              </p>
+            ))}
+            {p.operationalStatus === 'unknown' && (
+              <p className="mt-2 text-sm text-ink/70">Current opening/access status: not verified live. Confirm with the relevant local authority before travel.</p>
+            )}
           </li>
         ))}
       </ul>

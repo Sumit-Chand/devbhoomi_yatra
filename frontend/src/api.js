@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 // Dev: '' (Vite proxy). Production: set VITE_API_URL to your deployed backend.
 const BASE = import.meta.env.VITE_API_URL || ''
 
-export async function api(path, options = {}) {
-  const token = localStorage.getItem('dby_token')
+export async function api(path, options = {}, { includeAuth = true } = {}) {
+  const token = includeAuth ? localStorage.getItem('dby_token') : null
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }), ...options.headers },

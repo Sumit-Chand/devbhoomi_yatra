@@ -1,3 +1,5 @@
+import { destinationSources } from './destination-sources.js'
+
 // SAMPLE data covering all 13 districts. Coordinates, altitudes, seasons and distances are APPROXIMATE.
 // To add a place, add one row below: [id, name, district, altitude_m, lat, lng, best_months, tags, highlights (separated by |), optional tip].
 // Verify against official sources (e.g. Uttarakhand Tourism) before launch.
@@ -65,6 +67,8 @@ function seasonText(ms) {
 
 export const places = rows.map(([id, name, district, altitude, lat, lng, months, tags, hl, tip]) => ({
   id, name, district, region: REGION[district], altitude, lat, lng, months, season: seasonText(months), tags: tags.split(','), highlights: hl.split('|'),
+  operationalStatus: 'unknown',
+  sources: destinationSources[id] ? [destinationSources[id]] : [],
   tip: tip || 'Stay with local hosts, carry your waste out and check road and weather before you travel.',
 }))
 

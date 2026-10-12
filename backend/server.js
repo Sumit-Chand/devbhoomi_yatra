@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
 import { createHash, randomUUID, randomBytes } from 'node:crypto'
 import { places, buildRoute, buildItinerary } from './places.js'
+import { destinationDataNotes } from './destination-sources.js'
 
 const PORT = process.env.PORT || 5000
 const ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
@@ -17,6 +18,7 @@ const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL?.trim()
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const STATUSES = ['Pending', 'In Review', 'Resolved', 'Rejected']
 const MAX_REPORTS = 1000
+const MAX_RECOMMENDATION_FEEDBACK = 20000
 const MONGODB_URI = process.env.MONGODB_URI?.trim()
 const LIVE_DATA_TTL_MS = 10 * 60 * 1000
 const WEATHER_BATCH_SIZE = 5
@@ -25,6 +27,7 @@ const NDMA_FEED_URL = 'https://sachet.ndma.gov.in/cap_public_website/rss/rss_ind
 const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast'
 const WEATHER_SOURCE_URL = 'https://open-meteo.com/'
 const ALERT_SOURCE_URL = 'https://sachet.ndma.gov.in/'
+const RECOMMENDATION_INTERESTS = new Set(places.flatMap(place => place.tags))
 
 let SECRET = process.env.JWT_SECRET
 if (!SECRET) {
@@ -38,6 +41,7 @@ app.use(express.json({ limit: '10kb' }))
 
 const reports = []
 const users = []
+const recommendationFeedback = []
 const userSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true, maxlength: 60 },
@@ -55,8 +59,16 @@ const reportSchema = new mongoose.Schema({
   location: { type: String, required: true, maxlength: 200 },
   status: { type: String, enum: STATUSES, required: true },
 }, { timestamps: true, versionKey: false })
+const recommendationFeedbackSchema = new mongoose.Schema({
+  destinationId: { type: String, required: true, index: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  region: { type: String, enum: ['Any', 'Garhwal', 'Kumaon'], required: true },
+  month: { type: Number, required: true, min: 1, max: 12 },
+  interests: { type: [String], required: true },
+}, { timestamps: true, versionKey: false })
 const User = mongoose.model('User', userSchema)
 const Report = mongoose.model('Report', reportSchema)
+const RecommendationFeedback = mongoose.model('RecommendationFeedback', recommendationFeedbackSchema)
 const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
 const sign = u => jwt.sign({ sub: u.id, role: u.role }, SECRET, { expiresIn: '7d' })
 const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role === 'admin' && u.emailVerified === true ? 'admin' : 'user' })
@@ -65,6 +77,26 @@ const findUserByEmail = email => MONGODB_URI ? User.findOne({ email }).lean() : 
 const findUserById = id => MONGODB_URI ? User.findOne({ id }).lean() : users.find(u => u.id === id)
 const listReports = () => MONGODB_URI ? Report.find({}, { _id: 0, id: 1, category: 1, description: 1, location: 1, status: 1 }).lean() : reports
 const countReports = () => MONGODB_URI ? Report.countDocuments() : reports.length
+const listRecommendationFeedbackSummary = async () => {
+  if (MONGODB_URI) {
+    const rows = await RecommendationFeedback.aggregate([
+      { $group: { _id: '$destinationId', count: { $sum: 1 }, averageRating: { $avg: '$rating' } } },
+      { $project: { _id: 0, destinationId: '$_id', count: 1, averageRating: { $round: ['$averageRating', 1] } } },
+      { $sort: { destinationId: 1 } },
+    ])
+    return rows
+  }
+  const summary = new Map()
+  for (const { destinationId, rating } of recommendationFeedback) {
+    const current = summary.get(destinationId) || { destinationId, count: 0, total: 0 }
+    current.count += 1
+    current.total += rating
+    summary.set(destinationId, current)
+  }
+  return [...summary.values()]
+    .map(({ destinationId, count, total }) => ({ destinationId, count, averageRating: Math.round((total / count) * 10) / 10 }))
+    .sort((a, b) => a.destinationId.localeCompare(b.destinationId))
+}
 const hashToken = token => createHash('sha256').update(token).digest('hex')
 
 function auth(req, res, next) {
@@ -482,7 +514,33 @@ app.get('/api/stats', asyncHandler(async (_req, res) => {
 }))
 
 // ---- places data + trip planner (login required so the AI key cannot be used anonymously)
-app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, places: places.map(({ next, ...p }) => p) }))
+app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, dataNotes: destinationDataNotes, places: places.map(({ next, ...p }) => p) }))
+
+app.post('/api/recommendation-feedback', asyncHandler(async (req, res) => {
+  const { destinationId, rating, region, month, interests } = req.body ?? {}
+  const place = places.find(candidate => candidate.id === destinationId)
+  if (!place || !Number.isInteger(rating) || rating < 1 || rating > 5
+    || !['Any', 'Garhwal', 'Kumaon'].includes(region)
+    || (region !== 'Any' && place.region !== region)
+    || !Number.isInteger(month) || month < 1 || month > 12
+    || !Array.isArray(interests) || interests.length > 9
+    || new Set(interests).size !== interests.length
+    || interests.some(interest => typeof interest !== 'string' || !RECOMMENDATION_INTERESTS.has(interest))) {
+    return res.status(400).json({ error: 'Provide a valid destination, 1-5 rating, region, month, and matching selected interests' })
+  }
+  if (!MONGODB_URI && recommendationFeedback.length >= MAX_RECOMMENDATION_FEEDBACK) {
+    return res.status(503).json({ error: 'Feedback storage is full in temporary memory mode' })
+  }
+
+  const feedback = { destinationId, rating, region, month, interests: [...new Set(interests)] }
+  if (MONGODB_URI) await RecommendationFeedback.create(feedback)
+  else recommendationFeedback.push(feedback)
+  res.status(201).json({ saved: true })
+}))
+
+app.get('/api/recommendation-feedback/summary', asyncHandler(async (_req, res) => {
+  res.json({ ratings: await listRecommendationFeedbackSummary(), linkedAcrossVisits: false })
+}))
 
 app.post('/api/ai/plan-trip', auth, async (req, res) => {
   const days = Math.min(10, Math.max(1, parseInt(req.body?.days, 10) || 3))
