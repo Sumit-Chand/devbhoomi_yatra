@@ -22,9 +22,9 @@ export default function App() {
   const { user, logout } = useAuth()
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-pine">
-        <nav className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-1" aria-label="Main">
-          <Link to="/" className="font-display text-xl text-snow mr-auto">Devbhoomi Yatra</Link>
+      <header className="site-header">
+        <nav className="site-nav" aria-label="Main">
+          <Link to="/" className="site-brand"><span className="site-brand__symbol" aria-hidden="true">ॐ</span><span>Devbhoomi Yatra</span></Link>
           <NavLink to="/destinations" className={link}>Destinations</NavLink>
           <NavLink to="/alerts" className={link}>Alerts</NavLink>
           <NavLink to="/planner" className={link}>Trip planner</NavLink>
@@ -52,8 +52,8 @@ export default function App() {
             </div>} />
         </Routes>
       </main>
-      <footer className="bg-ink text-snow/80 text-sm">
-        <p className="max-w-5xl mx-auto px-4 py-4">Destination details are curated and approximate. Weather forecasts are model output, not official warnings; confirm road, weather and permit details with local authorities before you travel.</p>
+      <footer className="site-footer">
+        <p>Destination details are curated and approximate. Weather forecasts are model output, not official warnings; confirm road, weather and permit details with local authorities before you travel.</p>
       </footer>
     </div>
   )

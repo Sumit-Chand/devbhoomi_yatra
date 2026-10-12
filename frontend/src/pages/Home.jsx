@@ -1,30 +1,60 @@
 import { Link } from 'react-router-dom'
+import { useApi } from '../api.js'
+
+const mountainPhoto = {
+  thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Joshimath_auli_Badrinath.jpg',
+  pageUrl: 'https://commons.wikimedia.org/wiki/File:Joshimath_auli_Badrinath.jpg',
+  artist: 'Bibek Raj Pandeya',
+  license: 'CC BY-SA 4.0',
+}
 
 export default function Home() {
+  const { data: coverData } = useApi('/api/place-thumbnails?ids=auli')
+  const cover = coverData?.thumbnails?.auli?.image || mountainPhoto
+
   return (
     <>
-      <section className="bg-pine text-snow overflow-hidden">
-        <div className="max-w-5xl mx-auto px-4 pt-16">
-          <h1 className="text-4xl sm:text-6xl font-bold max-w-2xl leading-tight">Walk lightly through the land of the gods.</h1>
-          <p className="mt-4 max-w-xl text-lg text-snow/85">Plan trips across Garhwal and Kumaon, stay with local hosts, and tell us when a trail or road needs attention.</p>
+      <section className="scenic-hero text-snow" style={cover ? { '--hero-image': `url("${cover.thumbnailUrl}")` } : undefined}>
+        <div className="scenic-hero__inner">
+          <span className="scenic-hero__eyebrow">Uttarakhand · Garhwal &amp; Kumaon</span>
+          <h1 className="mt-5 max-w-3xl text-5xl font-bold leading-[1.05] sm:text-7xl">Find your stillness in the Himalaya.</h1>
+          <p className="mt-5 max-w-xl text-lg leading-relaxed text-white/90 sm:text-xl">Discover sacred trails, quiet mountain towns and the living culture of Devbhoomi.</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/destinations" className="bg-marigold text-ink font-semibold px-5 py-3 rounded-md">Browse destinations</Link>
-            <Link to="/report" className="border border-snow/60 px-5 py-3 rounded-md hover:bg-white/10">Report an issue</Link>
+            <Link to="/destinations" className="hero-action hero-action--primary">Explore destinations <span aria-hidden="true">→</span></Link>
+            <Link to="/alerts" className="hero-action hero-action--secondary">Check travel updates</Link>
           </div>
         </div>
-        <svg viewBox="0 0 1200 160" preserveAspectRatio="none" className="w-full h-28 sm:h-40 mt-8 block" aria-hidden="true">
-          <path d="M0 160V110l120-50 90 40 130-80 110 70 90-30 140-60 120 90 100-40 140-50 90 60 70-20v130z" fill="#DCE9EC" opacity=".25" />
-          <path d="M0 160V130l160-40 100 30 140-70 120 60 150-50 130 70 110-30 150-40 140 60v70z" fill="#F7F8F6" />
-        </svg>
+        <div className="scenic-hero__credit">
+          {cover
+            ? <a href={cover.pageUrl} target="_blank" rel="noreferrer">Photo: {cover.artist} · {cover.license}</a>
+            : <span>Himalayan scenery · photo loading</span>}
+        </div>
       </section>
-      <section className="max-w-5xl mx-auto px-4 py-12 grid gap-8 sm:grid-cols-3">
+      <section className="home-intro">
+        <p className="home-intro__kicker">A gentler way to travel</p>
+        <h2 className="mt-2 text-3xl font-bold text-pine sm:text-4xl">Rooted in nature. Guided by spirit.</h2>
+        <p className="mx-auto mt-3 max-w-2xl text-ink/70">Plan thoughtfully, explore respectfully, and let the mountains set the pace.</p>
+      </section>
+      <section className="home-features">
         {[
-          ['Choose the season', 'Every sample destination lists the months when it is at its best, so you avoid crowds and closed passes.'],
-          ['Stay local', 'Prefer homestays and village guides so tourism income stays in the hills.'],
-          ['Report problems', 'Landslides, litter and unsafe trails can be logged in under a minute.'],
-        ].map(([t, d]) => (
-          <div key={t}><h2 className="text-xl font-semibold text-pine">{t}</h2><p className="mt-2 max-w-sm">{d}</p></div>
+          ['01', 'Choose your path', 'Explore sacred places, forest walks and high Himalayan views across all 13 districts.', '/destinations', 'Explore places'],
+          ['02', 'Travel mindfully', 'Check district weather and public alerts before setting out into the mountains.', '/alerts', 'View travel updates'],
+          ['03', 'Care for the hills', 'Share a road, trail or cleanliness concern to help fellow travellers and local communities.', '/report', 'Report an issue'],
+        ].map(([number, title, description, path, action]) => (
+          <article key={number} className="home-feature">
+            <span className="home-feature__number">{number}</span>
+            <h3 className="mt-5 text-xl font-semibold text-pine">{title}</h3>
+            <p className="mt-2 leading-relaxed text-ink/70">{description}</p>
+            <Link className="home-feature__link" to={path}>
+              {action} <span aria-hidden="true">→</span>
+            </Link>
+          </article>
         ))}
+      </section>
+      <section className="home-quote">
+        <span aria-hidden="true" className="home-quote__mark">“</span>
+        <p>Leave only footprints. Take home a little more peace.</p>
+        <span className="home-quote__caption">Travel gently through Devbhoomi</span>
       </section>
     </>
   )

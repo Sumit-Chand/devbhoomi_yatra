@@ -1,6 +1,6 @@
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: { extend: {
-    colors: { pine: '#1F3D36', glacier: '#DCE9EC', snow: '#F7F8F6', marigold: '#E0A030', ink: '#1B2A2F' },
+    colors: { pine: '#173B49', glacier: '#DCEAF0', snow: '#F5F9FB', marigold: '#DDB66F', ink: '#1B2D36' },
     fontFamily: { display: ['Fraunces', 'serif'], sans: ['"Public Sans"', 'system-ui', 'sans-serif'] } } },
 }
