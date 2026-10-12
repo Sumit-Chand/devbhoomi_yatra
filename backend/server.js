@@ -13,6 +13,11 @@ const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase()
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const STATUSES = ['Pending', 'In Review', 'Resolved', 'Rejected']
 const MAX_REPORTS = 1000
+const LIVE_DATA_TTL_MS = 10 * 60 * 1000
+const NDMA_FEED_URL = 'https://sachet.ndma.gov.in/cap_public_website/rss/rss_india.xml'
+const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast'
+const WEATHER_SOURCE_URL = 'https://open-meteo.com/'
+const ALERT_SOURCE_URL = 'https://sachet.ndma.gov.in/'
 
 let SECRET = process.env.JWT_SECRET
 if (!SECRET) {
@@ -69,13 +74,198 @@ app.get('/api/auth/me', auth, (req, res) => {
   u ? res.json(pub(u)) : res.status(401).json({ error: 'Please log in' })
 })
 
-// ---- alerts (SAMPLE data: replace with verified sources)
-const alerts = [
-  { id: 'A1', level: 'Warning', area: 'Garhwal', title: 'Landslide-prone road stretch', detail: 'Sample alert. Travel in daylight and check road status with local police before leaving.' },
-  { id: 'A2', level: 'Watch', area: 'Kumaon', title: 'Heavy rain expected in the hills', detail: 'Sample alert. Carry rain gear and keep spare days in your plan.' },
-  { id: 'A3', level: 'Info', area: 'Garhwal', title: 'Permit needed for high-altitude trek', detail: 'Sample alert. Confirm permit rules with the forest office before you go.' },
+const districtNames = [
+  'Uttarakhand', 'Dehradun', 'Haridwar', 'Pauri Garhwal', 'Tehri Garhwal', 'Uttarkashi',
+  'Chamoli', 'Rudraprayag', 'Nainital', 'Almora', 'Bageshwar', 'Pithoragarh',
+  'Champawat', 'Udham Singh Nagar',
 ]
-app.get('/api/alerts', (_req, res) => res.json({ demo: true, alerts }))
+const districtPattern = new RegExp(`\\b(?:${districtNames.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'i')
+const weatherPoints = places.filter((place, index) => places.findIndex(p => p.district === place.district) === index)
+const liveCache = {
+  warnings: { data: null, fetchedAt: 0, pending: null },
+  weather: { data: null, fetchedAt: 0, pending: null },
+}
+
+function decodeXml(value) {
+  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+    .trim()
+}
+
+function xmlField(xml, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = xml.match(new RegExp(`<(?:(?:[\\w.-]+):)?${escaped}\\b[^>]*>([\\s\\S]*?)<\\/(?:(?:[\\w.-]+):)?${escaped}\\s*>`, 'i'))
+  return match ? decodeXml(match[1].replace(/<[^>]+>/g, ' ')) : ''
+}
+
+async function fetchXml(url) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { Accept: 'application/xml, application/rss+xml' } })
+  if (!response.ok) throw new Error(`Live data source returned ${response.status}`)
+  return response.text()
+}
+
+function parseRssItems(xml) {
+  return [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].map(([, item]) => ({
+    title: xmlField(item, 'title'),
+    author: xmlField(item, 'author'),
+    publishedAt: xmlField(item, 'pubDate'),
+    link: xmlField(item, 'link'),
+    guid: xmlField(item, 'guid'),
+  })).filter(item => item.title && item.link && districtPattern.test(item.title))
+}
+
+function parseCapAlert(xml, item) {
+  const status = xmlField(xml, 'status')
+  const messageType = xmlField(xml, 'msgType')
+  const sent = xmlField(xml, 'sent')
+  const references = xmlField(xml, 'references')
+  const infos = [...xml.matchAll(/<(?:[\w.-]+:)?info\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?info\s*>/gi)].map(([, info]) => info)
+  const info = infos.find(block => /^en(?:$|-)/i.test(xmlField(block, 'language'))) || infos[0] || ''
+  const areas = [...info.matchAll(/<(?:[\w.-]+:)?area\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?area\s*>/gi)]
+    .map(([, area]) => xmlField(area, 'areaDesc')).filter(Boolean)
+  const area = areas.join(', ')
+
+  if (status !== 'Actual' || (area && !districtPattern.test(area))) return null
+  if (!area && !districtPattern.test(item.title)) return null
+
+  const expires = xmlField(info, 'expires')
+  if (messageType !== 'Cancel' && (!expires || !Number.isFinite(Date.parse(expires)) || Date.parse(expires) <= Date.now())) return null
+
+  return {
+    id: xmlField(xml, 'identifier') || item.guid,
+    title: xmlField(info, 'headline') || xmlField(info, 'event') || item.title,
+    detail: xmlField(info, 'description') || xmlField(info, 'instruction'),
+    area: area || 'Uttarakhand',
+    severity: xmlField(info, 'severity') || 'Unknown',
+    sender: xmlField(xml, 'sender') || item.author,
+    issuedAt: sent || item.publishedAt,
+    expiresAt: expires,
+    sourceUrl: item.link,
+    messageType,
+    references,
+  }
+}
+
+async function loadOfficialWarnings() {
+  const feed = await fetchXml(NDMA_FEED_URL)
+  const items = parseRssItems(feed).slice(0, 5)
+  const alerts = (await Promise.all(items.map(async item => {
+    const url = new URL(item.link)
+    if (url.hostname !== 'sachet.ndma.gov.in' || url.pathname !== '/cap_public_website/FetchXMLFile') return null
+    return parseCapAlert(await fetchXml(url), item)
+  }))).filter(Boolean)
+
+  const withdrawn = new Set()
+  for (const alert of alerts) {
+    if (alert.messageType === 'Update' || alert.messageType === 'Cancel') {
+      for (const reference of alert.references.split(/\s+/)) {
+        const [, identifier] = reference.split(',')
+        if (identifier) withdrawn.add(identifier)
+      }
+    }
+  }
+  const currentAlerts = alerts.filter(alert => alert.messageType !== 'Cancel' && !withdrawn.has(alert.id))
+    .sort((a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt))
+    .map(({ messageType, references, ...alert }) => alert)
+  return currentAlerts
+}
+
+const weatherCodeNames = {
+  0: 'Clear', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Freezing fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
+  56: 'Freezing drizzle', 57: 'Heavy freezing drizzle', 61: 'Light rain', 63: 'Rain',
+  65: 'Heavy rain', 66: 'Freezing rain', 67: 'Heavy freezing rain', 71: 'Light snow',
+  73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains', 80: 'Rain showers',
+  81: 'Rain showers', 82: 'Heavy rain showers', 85: 'Snow showers', 86: 'Heavy snow showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with heavy hail',
+}
+
+async function loadWeather() {
+  const params = new URLSearchParams({
+    latitude: weatherPoints.map(p => p.lat).join(','),
+    longitude: weatherPoints.map(p => p.lng).join(','),
+    current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m',
+    hourly: 'precipitation_probability',
+    forecast_days: '1',
+    timezone: 'Asia/Kolkata',
+  })
+  const response = await fetch(`${WEATHER_API_URL}?${params}`, { signal: AbortSignal.timeout(12000) })
+  if (!response.ok) throw new Error(`Weather forecast source returned ${response.status}`)
+  const payload = await response.json()
+  if (!Array.isArray(payload) || payload.length !== weatherPoints.length) throw new Error('Weather forecast source returned unexpected data')
+
+  return payload.map((forecast, i) => {
+    const point = weatherPoints[i]
+    const current = forecast.current
+    if (!current || typeof current.temperature_2m !== 'number') throw new Error('Weather forecast source returned incomplete data')
+    const nextHour = forecast.hourly?.time?.findIndex(time => time >= current.time) ?? -1
+    const probabilities = forecast.hourly?.precipitation_probability || []
+    const nextSixHours = nextHour < 0 ? [] : probabilities.slice(nextHour, nextHour + 6).filter(Number.isFinite)
+    return {
+      district: point.district,
+      location: point.name,
+      time: current.time,
+      temperatureC: current.temperature_2m,
+      apparentTemperatureC: current.apparent_temperature,
+      condition: weatherCodeNames[current.weather_code] || 'Conditions unavailable',
+      precipitationMm: current.precipitation,
+      precipitationChanceNext6h: nextSixHours.length ? Math.max(...nextSixHours) : null,
+      windKmh: current.wind_speed_10m,
+      windGustKmh: current.wind_gusts_10m,
+    }
+  })
+}
+
+async function readLiveData(source) {
+  const cache = liveCache[source]
+  if (cache.data && Date.now() - cache.fetchedAt < LIVE_DATA_TTL_MS) {
+    return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: false }
+  }
+  if (!cache.pending) {
+    cache.pending = (source === 'warnings' ? loadOfficialWarnings() : loadWeather())
+      .then(data => {
+        cache.data = data
+        cache.fetchedAt = Date.now()
+        return data
+      })
+      .finally(() => { cache.pending = null })
+  }
+  try {
+    const data = await cache.pending
+    return { data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: false }
+  } catch (error) {
+    if (cache.data) return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: true, error: error.message }
+    throw error
+  }
+}
+
+app.get('/api/alerts', async (_req, res) => {
+  const [warningsResult, weatherResult] = await Promise.allSettled([
+    readLiveData('warnings'),
+    readLiveData('weather'),
+  ])
+  const warnings = warningsResult.status === 'fulfilled' ? {
+    alerts: warningsResult.value.data,
+    updatedAt: warningsResult.value.updatedAt,
+    stale: warningsResult.value.stale,
+    error: warningsResult.value.error || null,
+    source: ALERT_SOURCE_URL,
+  } : { alerts: null, error: warningsResult.reason.message, source: ALERT_SOURCE_URL }
+  const weather = weatherResult.status === 'fulfilled' ? {
+    forecasts: weatherResult.value.data,
+    updatedAt: weatherResult.value.updatedAt,
+    stale: weatherResult.value.stale,
+    error: weatherResult.value.error || null,
+    source: WEATHER_SOURCE_URL,
+  } : { forecasts: null, error: weatherResult.reason.message, source: WEATHER_SOURCE_URL }
+  if (warningsResult.status === 'rejected' && weatherResult.status === 'rejected') {
+    return res.status(502).json({ error: 'Live alert and weather sources are currently unavailable', warnings, weather })
+  }
+  res.json({ warnings, weather })
+})
 
 // ---- reports
 app.get('/api/reports', (_req, res) => res.json(reports))
@@ -107,7 +297,7 @@ const tally = key => Object.entries(reports.reduce((m, r) => ((m[r[key]] = (m[r[
 app.get('/api/stats', (_req, res) => res.json({ total: reports.length, byCategory: tally('category'), byStatus: tally('status') }))
 
 // ---- places data + trip planner (login required so the AI key cannot be used anonymously)
-app.get('/api/places', (_req, res) => res.json({ demo: true, places: places.map(({ next, months, ...p }) => p) }))
+app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, places: places.map(({ next, months, ...p }) => p) }))
 
 app.post('/api/ai/plan-trip', auth, async (req, res) => {
   const days = Math.min(10, Math.max(1, parseInt(req.body?.days, 10) || 3))

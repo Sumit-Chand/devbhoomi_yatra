@@ -10,7 +10,7 @@ export default function Destinations() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
       <h1 className="text-3xl font-bold text-pine">Destinations</h1>
-      <p className="mt-1 text-ink/70">Sample listings across all 13 districts. Altitudes and seasons are approximate.</p>
+      <p className="mt-1 text-ink/70">Curated destination information across Uttarakhand. Altitudes, seasons and highlights are approximate; confirm local access, permits and conditions before travel.</p>
       <label className="mt-5 block font-medium max-w-xs">District
         <select className="mt-1 w-full border border-pine/30 rounded-md px-3 py-2 bg-white" value={district} onChange={e => setDistrict(e.target.value)}>
           {districts.map(d => <option key={d}>{d}</option>)}

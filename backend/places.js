@@ -42,6 +42,17 @@ const rows = [
   ['corbett', 'Jim Corbett (Ramnagar)', 'Nainital', 400, 29.53, 79.13, [11, 12, 1, 2, 3, 4, 5, 6], 'wildlife,nature', 'Jeep safari in a permitted zone|Birdwatching along the Kosi river', 'Book safaris in advance through official channels and follow guide rules.'],
   ['champawat', 'Champawat', 'Champawat', 1615, 29.34, 80.09, M, 'culture,spiritual', 'Visit Baleshwar temple|See the old Chand-era stonework'],
   ['nanakmatta', 'Nanakmatta', 'Udham Singh Nagar', 220, 28.95, 79.92, W, 'spiritual,relax', 'Visit Nanakmatta Sahib Gurudwara|Walk along the reservoir'],
+  ['chakrata', 'Chakrata', 'Dehradun', 2118, 30.70, 77.87, M, 'nature,views,trek', 'Walk among the deodar forests|Visit Tiger Falls with care on the trail', 'Check local road conditions before visiting, especially during heavy rain.'],
+  ['yamunotri', 'Yamunotri', 'Uttarkashi', 3293, 31.01, 78.46, [5, 6, 9, 10], 'spiritual,trek,views', 'Visit Yamunotri temple during the open season|Plan the walk from Janki Chatti', 'The temple is seasonal; confirm opening dates, registration and route conditions before travel.'],
+  ['joshimath', 'Joshimath', 'Chamoli', 1875, 30.56, 79.57, M, 'spiritual,views,adventure,snow', 'Visit the Narsingh temple|Use Joshimath as a base for nearby mountain destinations', 'Check current road, weather and ropeway status before setting out.'],
+  ['gopeshwar', 'Gopeshwar', 'Chamoli', 1550, 30.40, 79.32, M, 'culture,spiritual,views', 'Visit the Gopinath temple|Explore the town bazaar and surrounding mountain views'],
+  ['mana', 'Mana Village', 'Chamoli', 3200, 30.77, 79.49, [5, 6, 9, 10], 'culture,views,spiritual', 'Walk through the village near Badrinath|Ask locally about seasonal access and visiting hours', 'Access is seasonal and weather-dependent; confirm locally before travelling.'],
+  ['deoria-tal', 'Deoria Tal', 'Rudraprayag', 2438, 30.52, 79.05, [4, 5, 6, 9, 10, 11], 'trek,nature,views', 'Walk to the lake from Sari village|Enjoy mountain views from the lakeside', 'Follow local forest rules and carry all litter back down.'],
+  ['dharchula', 'Dharchula', 'Pithoragarh', 915, 29.85, 80.54, M, 'culture,views,nature', 'Walk near the Kali river|Explore the town and local markets', 'Some nearby border areas require permits; confirm current rules with local authorities.'],
+  ['patal-bhuvaneshwar', 'Patal Bhuvaneshwar', 'Pithoragarh', 1350, 29.68, 80.03, M, 'spiritual,nature,culture', 'Visit the limestone cave temple with a local guide|Explore nearby village landscapes', 'Follow local cave-entry rules and check access before travelling.'],
+  ['lohaghat', 'Lohaghat', 'Champawat', 1745, 29.40, 80.09, M, 'culture,views,relax', 'Explore the old town and nearby viewpoints|Visit Abbott Mount with locally confirmed access'],
+  ['ramgarh', 'Ramgarh', 'Nainital', 1789, 29.45, 79.56, M, 'nature,views,relax', 'Walk through the orchard country|Enjoy views from village paths', 'Orchard visits are seasonal and may require permission from the host.'],
+  ['kalsi', 'Kalsi', 'Dehradun', 780, 30.52, 77.84, W, 'culture,nature', 'Visit the Ashokan rock edict site|Explore the Yamuna and Tons river area'],
 ]
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

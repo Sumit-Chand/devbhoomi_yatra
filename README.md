@@ -18,5 +18,7 @@ cd backend && npm install && cp .env.example .env && npm run dev
 cd frontend && npm install && npm run dev
 ```
 
-All destination, alert, dashboard and score data is SAMPLE data and labelled as such.
+Destinations and trip-planner details are curated sample information and may be approximate. The travel updates page retrieves official public alerts from NDMA SACHET and forecast data from Open-Meteo through the backend. Forecasts are not official warnings, and the project does not have a live road-closure feed. Live data is cached for up to 10 minutes; if a source is unavailable, previously retrieved data is marked as stale.
+
+Weather data is attributed to [Open-Meteo](https://open-meteo.com/). Official alerts are attributed to [NDMA SACHET](https://sachet.ndma.gov.in/).
 Never commit `.env` (it is git-ignored).
