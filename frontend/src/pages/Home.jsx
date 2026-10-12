@@ -11,8 +11,10 @@ const features = [
     description: 'Explore sacred places, forest walks and high Himalayan views across all 13 districts.',
     path: '/destinations',
     action: 'Explore places',
-    image: cover.thumbnailUrl,
+    image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg/1920px-Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg',
     imageAlt: 'Snow-covered Himalayan peaks above the natural ridges of Uttarakhand',
+    artist: 'Harshit SR / UnpetitproleX',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Panorama_of_Himalayas_from_Ranikhet,_Uttarakhand,_India.jpg',
   },
   {
     number: '02',
