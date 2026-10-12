@@ -55,9 +55,93 @@ const rows = [
   ['lohaghat', 'Lohaghat', 'Champawat', 1745, 29.40, 80.09, M, 'culture,views,relax', 'Explore the old town and nearby viewpoints|Visit Abbott Mount with locally confirmed access'],
   ['ramgarh', 'Ramgarh', 'Nainital', 1789, 29.45, 79.56, M, 'nature,views,relax', 'Walk through the orchard country|Enjoy views from village paths', 'Orchard visits are seasonal and may require permission from the host.'],
   ['kalsi', 'Kalsi', 'Dehradun', 780, 30.52, 77.84, W, 'culture,nature', 'Visit the Ashokan rock edict site|Explore the Yamuna and Tons river area'],
+  ['vasudhara-falls', 'Vasudhara Falls', 'Chamoli', 4000, 30.77, 79.48, [5, 6, 9, 10], 'trek,nature,views', 'Trek from Mana village toward the waterfall|Enjoy views of the surrounding high Himalayan valley', 'High-altitude access depends on weather and local conditions; confirm the route locally.'],
+  ['hemkund-sahib', 'Hemkund Sahib', 'Chamoli', 4632, 30.70, 79.62, [6, 7, 8, 9], 'spiritual,trek,nature,views', 'Trek from Ghangaria to the high-altitude shrine|Plan for a demanding mountain route', 'Seasonal, high-altitude trek. Confirm registration, opening dates, weather and route conditions before travel.'],
+  ['tungnath', 'Tungnath Temple', 'Rudraprayag', 3680, 30.49, 79.22, [4, 5, 6, 9, 10, 11], 'spiritual,trek,views', 'Walk the trail from Chopta to Tungnath|Continue toward Chandrashila only if conditions and fitness allow', 'Confirm seasonal access, weather and trail status with local authorities.'],
+  ['gairsain', 'Gairsain', 'Chamoli', 1650, 30.06, 79.29, M, 'culture,nature,views', 'Explore the hill town and surrounding villages|Use local guidance for nearby walks'],
+  ['abbott-mount', 'Abbott Mount', 'Champawat', 2000, 29.40, 80.08, M, 'views,nature,relax', 'Walk among the forested slopes|Visit the historic chapel area respectfully', 'Confirm property access and local road conditions before visiting.'],
+  ['kaladhungi', 'Kaladhungi', 'Nainital', 405, 29.28, 79.35, W, 'wildlife,nature,culture', 'Visit the Jim Corbett heritage museum|Ask locally about permitted forest activities', 'Do not enter forest areas without the required permissions or an authorized guide.'],
+  ['jwalpa-devi', 'Jwalpa Devi Temple', 'Pauri Garhwal', 600, 29.94, 78.70, W, 'spiritual,culture,nature', 'Visit the temple on the banks of the Nawalika river|Check local guidance during festival periods'],
+  ['kasar-devi', 'Kasar Devi', 'Almora', 2116, 29.69, 79.66, M, 'spiritual,views,nature', 'Visit the hilltop temple|Walk the surrounding ridge paths'],
+  ['katarmal-sun-temple', 'Katarmal Sun Temple', 'Almora', 2116, 29.67, 79.62, M, 'culture,spiritual', 'Explore the historic stone temple complex|Use the marked approach trail'],
+  ['dwarahat', 'Dwarahat', 'Almora', 1510, 29.78, 79.43, M, 'culture,spiritual', 'Visit the group of historic temples|Explore the old hill town'],
+  ['dunagiri-temple', 'Dunagiri Temple', 'Almora', 2500, 29.84, 79.47, M, 'spiritual,views,nature', 'Climb the temple approach steps|Check local access and weather before the visit'],
+  ['lakhudiyar', 'Lakhudiyar Rock Shelters', 'Almora', 1200, 29.74, 79.70, M, 'culture,nature', 'View the prehistoric rock-art site respectfully|Follow local directions to the site'],
+  ['kafni-glacier', 'Kafni Glacier Trek', 'Bageshwar', 3860, 30.22, 79.99, [5, 6, 9, 10], 'trek,nature,views', 'Plan the multi-day trek with local guidance|Check weather and route conditions before departure', PERMIT],
+  ['sunderdhunga-valley', 'Sunderdhunga Valley', 'Bageshwar', 3200, 30.12, 79.95, [5, 6, 9, 10], 'trek,nature,views', 'Arrange a local guide for the remote valley route|Allow time for changing mountain conditions', PERMIT],
+  ['kanda', 'Kanda', 'Bageshwar', 1500, 29.91, 79.83, M, 'culture,views,nature', 'Explore the hill town and nearby village paths|Confirm local transport options'],
+  ['vijaypur', 'Vijaypur', 'Bageshwar', 2050, 29.95, 79.68, M, 'views,nature,relax', 'Enjoy views of the Himalayan range on clear days|Support local homestays and shops'],
+  ['rudranath', 'Rudranath Temple', 'Chamoli', 3600, 30.49, 79.32, [5, 6, 9, 10], 'spiritual,trek,nature,views', 'Reach the seasonal temple by its mountain trail|Plan the trek with current local guidance', 'Remote seasonal trek; check registration, weather and trail conditions before setting out.'],
+  ['kalpeshwar', 'Kalpeshwar Temple', 'Chamoli', 2200, 30.55, 79.41, [4, 5, 6, 9, 10, 11], 'spiritual,culture,nature', 'Visit the temple in the Urgam valley|Check road and trail conditions locally'],
+  ['adi-badri', 'Adi Badri Temple Complex', 'Chamoli', 1800, 30.03, 79.22, M, 'spiritual,culture', 'Explore the historic temple complex|Respect local worship and site guidelines'],
+  ['gwaldam', 'Gwaldam', 'Chamoli', 1700, 30.04, 79.57, M, 'views,nature,relax', 'Use the town as a base for nearby village walks|Check mountain road conditions before travelling'],
+  ['urgam-valley', 'Urgam Valley', 'Chamoli', 2100, 30.55, 79.41, M, 'nature,culture,views', 'Walk among the valley villages|Ask locally before entering farms or private paths'],
+  ['purnagiri-temple', 'Purnagiri Temple', 'Champawat', 3000, 29.11, 80.08, [3, 4, 5, 6, 9, 10], 'spiritual,trek,views', 'Follow the marked uphill pilgrimage route|Check seasonal crowd and access information locally', 'The steep route and seasonal conditions require preparation; follow current local advice.'],
+  ['devidhura', 'Devidhura', 'Champawat', 1800, 29.37, 80.06, M, 'culture,spiritual,nature', 'Visit the Varahi Devi temple area respectfully|Check local arrangements during festivals'],
+  ['shyamlatal', 'Shyamlatal Lake', 'Champawat', 1500, 29.22, 80.10, M, 'nature,relax,spiritual', 'Walk beside the lake|Visit the Vivekananda Ashram with respect for its rules'],
+  ['mayawati-ashram', 'Mayawati Advaita Ashram', 'Champawat', 1940, 29.43, 80.07, M, 'spiritual,nature,relax', 'Check visitor guidance before arrival|Keep the quiet ashram grounds peaceful'],
+  ['pancheshwar', 'Pancheshwar', 'Champawat', 700, 29.25, 80.27, W, 'nature,views,culture', 'See the Kali and Saryu river confluence|Confirm road and riverside conditions locally'],
+  ['sahastradhara', 'Sahastradhara', 'Dehradun', 700, 30.39, 78.13, M, 'nature,relax', 'Visit the waterfall and spring area|Use designated paths and keep the water clean'],
+  ['tapkeshwar', 'Tapkeshwar Mahadev Temple', 'Dehradun', 640, 30.37, 78.02, M, 'spiritual,culture,nature', 'Visit the riverside cave temple|Check local access during heavy rain'],
+  ['asan-conservation-reserve', 'Asan Conservation Reserve', 'Dehradun', 400, 30.44, 77.67, [10, 11, 12, 1, 2, 3], 'wildlife,nature', 'Observe birds quietly from permitted areas|Follow sanctuary and wetland rules'],
+  ['lacchiwala', 'Lachhiwala Nature Park', 'Dehradun', 650, 30.27, 78.10, M, 'nature,relax', 'Use marked paths in the forest recreation area|Check current entry and facility status locally'],
+  ['mindrolling-monastery', 'Mindrolling Monastery', 'Dehradun', 600, 30.27, 78.00, M, 'culture,spiritual', 'Visit the monastery grounds respectfully|Check visitor hours and photography rules'],
+  ['rajaji-national-park', 'Rajaji National Park (Dehradun zone)', 'Dehradun', 500, 30.07, 78.13, [11, 12, 1, 2, 3, 4, 5, 6], 'wildlife,nature', 'Book permitted safari activities through official channels|Follow guide instructions and wildlife rules', 'Park access is seasonal and zone-specific; confirm current openings and permits.'],
+  ['chandi-devi-temple', 'Chandi Devi Temple', 'Haridwar', 290, 29.93, 78.17, W, 'spiritual,culture,views', 'Reach the hilltop temple by the permitted route|Check ropeway operation and walking conditions locally'],
+  ['mansa-devi-temple', 'Mansa Devi Temple', 'Haridwar', 290, 29.95, 78.16, W, 'spiritual,culture,views', 'Visit the hilltop shrine|Check ropeway status and crowd advisories locally'],
+  ['shantikunj', 'Shantikunj', 'Haridwar', 310, 29.99, 78.17, W, 'spiritual,culture', 'Check visitor and accommodation rules in advance|Respect the campus schedule'],
+  ['sapta-rishi-ashram', 'Sapta Rishi Ashram', 'Haridwar', 310, 29.99, 78.19, W, 'spiritual,culture', 'Visit the riverside ashram respectfully|Follow local guidance around the Ganga'],
+  ['bharat-mata-mandir', 'Bharat Mata Mandir', 'Haridwar', 310, 29.98, 78.17, W, 'culture,spiritual', 'Explore the multi-storey temple|Check opening hours locally'],
+  ['sattal', 'Sattal', 'Nainital', 1370, 29.34, 79.55, M, 'nature,wildlife,relax', 'Walk the forest paths around the lakes|Use designated boating services only'],
+  ['naukuchiatal', 'Naukuchiatal', 'Nainital', 1220, 29.33, 79.60, M, 'nature,relax,adventure', 'Walk beside the lake|Choose permitted water activities and local operators'],
+  ['kainchi-dham', 'Kainchi Dham', 'Nainital', 1400, 29.42, 79.52, M, 'spiritual,culture', 'Follow the ashram visitor guidelines|Plan for traffic and crowds on busy days'],
+  ['pangot', 'Pangot', 'Nainital', 2000, 29.40, 79.43, M, 'wildlife,nature,views', 'Go birdwatching with a responsible local guide|Keep noise low in the forest'],
+  ['kilbury', 'Kilbury', 'Nainital', 2200, 29.42, 79.42, M, 'wildlife,nature,views', 'Explore the forest area quietly|Check road conditions and local access'],
+  ['ghorakhal', 'Ghorakhal', 'Nainital', 2000, 29.39, 79.47, M, 'spiritual,views,nature', 'Visit the Golu Devta temple respectfully|Check local access and crowd conditions'],
+  ['srinagar-garhwal', 'Srinagar Garhwal', 'Pauri Garhwal', 560, 30.22, 78.78, M, 'culture,spiritual', 'Explore the town and riverside ghats|Take care near the river, especially during rains'],
+  ['tarkeshwar-mahadev', 'Tarkeshwar Mahadev Temple', 'Pauri Garhwal', 1800, 29.87, 78.83, M, 'spiritual,nature', 'Visit the temple among the deodar forest|Confirm the approach road locally'],
+  ['kandoliya', 'Kandoliya Temple and Park', 'Pauri Garhwal', 1800, 30.15, 78.78, M, 'spiritual,views,nature', 'Walk the forested paths near Pauri|Use the designated picnic areas'],
+  ['neelkanth-mahadev', 'Neelkanth Mahadev Temple', 'Pauri Garhwal', 1300, 30.12, 78.32, M, 'spiritual,nature,trek', 'Visit the temple by the road or marked route|Check traffic and access locally'],
+  ['devprayag', 'Devprayag', 'Tehri Garhwal', 830, 30.15, 78.60, M, 'spiritual,culture,nature', 'View the Alaknanda and Bhagirathi confluence from permitted areas|Use care on steep riverside steps'],
+  ['askot', 'Askot Wildlife Sanctuary', 'Pithoragarh', 1650, 29.77, 80.34, M, 'wildlife,nature,views', 'Arrange local guidance before exploring remote areas|Follow forest permissions and wildlife rules'],
+  ['gangolihat', 'Gangolihat', 'Pithoragarh', 1750, 29.67, 80.05, M, 'culture,spiritual,views', 'Visit the Hat Kalika temple respectfully|Use local directions for nearby viewpoints'],
+  ['berinag', 'Berinag', 'Pithoragarh', 1860, 29.78, 80.07, M, 'views,nature,relax', 'Enjoy mountain views on clear days|Explore local tea gardens only with permission'],
+  ['narayan-ashram', 'Narayan Ashram', 'Pithoragarh', 2730, 29.98, 80.54, [4, 5, 6, 9, 10], 'spiritual,nature,views', 'Confirm visitor access before travelling to the remote ashram|Check road and weather conditions'],
+  ['jauljibi', 'Jauljibi', 'Pithoragarh', 600, 29.85, 80.34, M, 'culture,nature', 'Visit the Kali and Gori river confluence|Check local border-area guidance and road access'],
+  ['guptkashi', 'Guptkashi', 'Rudraprayag', 1319, 30.52, 79.08, M, 'spiritual,culture,views', 'Visit the Vishwanath temple area|Use the town as a base only after checking current routes'],
+  ['ukhimath', 'Ukhimath', 'Rudraprayag', 1317, 30.52, 79.20, M, 'spiritual,culture,views', 'Visit the Omkareshwar temple|Confirm seasonal ceremonies and local access'],
+  ['triyuginarayan', 'Triyuginarayan Temple', 'Rudraprayag', 1980, 30.64, 78.99, M, 'spiritual,culture,nature', 'Visit the temple village respectfully|Check road conditions and local transport'],
+  ['kalimath', 'Kalimath Temple', 'Rudraprayag', 1800, 30.60, 78.95, M, 'spiritual,culture,nature', 'Follow temple customs and local directions|Check access conditions before travelling'],
+  ['madhyamaheshwar', 'Madhyamaheshwar Temple Trek', 'Rudraprayag', 3497, 30.63, 79.22, [5, 6, 9, 10], 'spiritual,trek,nature,views', 'Plan the multi-day trek with local guidance|Check weather, accommodation and trail conditions', 'Remote seasonal trek; confirm route and registration requirements locally.'],
+  ['new-tehri', 'New Tehri', 'Tehri Garhwal', 1550, 30.38, 78.48, M, 'culture,views,relax', 'Explore the hill town viewpoints|Check local access to lake activities'],
+  ['chamba-tehri', 'Chamba', 'Tehri Garhwal', 1676, 30.34, 78.39, M, 'views,nature,relax', 'Enjoy views over the Bhagirathi valley|Use local guidance for nearby village walks'],
+  ['kanatal', 'Kanatal', 'Tehri Garhwal', 2590, 30.41, 78.31, M, 'nature,views,relax', 'Walk the forest trails with local guidance|Check road and weather conditions'],
+  ['khatling-glacier', 'Khatling Glacier Trek', 'Tehri Garhwal', 3717, 30.68, 78.78, [5, 6, 9, 10], 'trek,nature,views', 'Arrange experienced local support for the remote trek|Check permits, weather and trail conditions', PERMIT],
+  ['gularbhoj', 'Gularbhoj Reservoir', 'Udham Singh Nagar', 250, 29.02, 79.20, W, 'nature,relax,wildlife', 'Enjoy the reservoir landscape from public areas|Follow local boating and safety rules'],
+  ['begul-reservoir', 'Begul Reservoir', 'Udham Singh Nagar', 230, 28.97, 79.50, W, 'nature,wildlife,relax', 'Observe wetland birds from a respectful distance|Check local access before visiting'],
+  ['atariya-temple', 'Atariya Temple', 'Udham Singh Nagar', 220, 28.98, 79.41, W, 'spiritual,culture', 'Visit the temple respectfully|Check opening and festival arrangements locally'],
+  ['dronasagar', 'Dronasagar Lake', 'Udham Singh Nagar', 220, 29.21, 78.96, W, 'culture,spiritual,relax', 'Visit the lake and nearby heritage area|Follow local site guidance'],
+  ['moteshwar-temple', 'Moteshwar Mahadev Temple', 'Udham Singh Nagar', 220, 29.20, 78.95, W, 'spiritual,culture', 'Visit the temple respectfully|Confirm local access and festival arrangements'],
+  ['harsil', 'Harsil', 'Uttarkashi', 2620, 30.74, 78.45, [4, 5, 6, 9, 10, 11], 'nature,views,relax', 'Walk through the valley and village paths|Check road, weather and any local access restrictions'],
+  ['dodital', 'Dodital Lake Trek', 'Uttarkashi', 3024, 30.87, 78.55, [4, 5, 6, 9, 10, 11], 'trek,nature,views', 'Plan the trek with local guidance|Check permits, weather and trail conditions', PERMIT],
+  ['har-ki-dun', 'Har Ki Dun Valley Trek', 'Uttarkashi', 3566, 31.13, 78.28, [4, 5, 6, 9, 10, 11], 'trek,nature,views', 'Arrange a responsible local guide for the multi-day trek|Check current trail and weather conditions', PERMIT],
+  ['nachiketa-tal', 'Nachiketa Tal', 'Uttarkashi', 2450, 30.71, 78.42, M, 'trek,nature,views', 'Reach the lake by the marked forest path|Check local trail conditions before starting'],
+  ['maneri-dam', 'Maneri Dam', 'Uttarkashi', 1300, 30.84, 78.51, M, 'nature,views', 'View the river valley from permitted public areas|Respect dam security restrictions'],
+  ['gangnani', 'Gangnani Hot Springs', 'Uttarkashi', 2100, 30.89, 78.63, M, 'nature,relax,spiritual', 'Use designated bathing areas and follow local customs|Check access and water conditions locally'],
 ]
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MAX_PLACES_PER_DISTRICT = 100
+const placeIds = new Set()
+const placeCounts = new Map()
+for (const [id, name, district] of rows) {
+  if (placeIds.has(id)) throw new Error(`Duplicate destination ID: ${id}`)
+  placeIds.add(id)
+  const count = (placeCounts.get(district) || 0) + 1
+  if (count > MAX_PLACES_PER_DISTRICT) throw new Error(`Destination limit of ${MAX_PLACES_PER_DISTRICT} exceeded for ${district}`)
+  placeCounts.set(district, count)
+}
+
 function seasonText(ms) {
   const runs = []
   for (const m of [...ms].sort((a, b) => a - b)) { const r = runs.at(-1); r && m === r[1] + 1 ? (r[1] = m) : runs.push([m, m]) }

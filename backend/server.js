@@ -27,6 +27,8 @@ const NDMA_FEED_URL = 'https://sachet.ndma.gov.in/cap_public_website/rss/rss_ind
 const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast'
 const WEATHER_SOURCE_URL = 'https://open-meteo.com/'
 const ALERT_SOURCE_URL = 'https://sachet.ndma.gov.in/'
+const COMMONS_API_URL = 'https://commons.wikimedia.org/w/api.php'
+const COMMONS_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const RECOMMENDATION_INTERESTS = new Set(places.flatMap(place => place.tags))
 
 let SECRET = process.env.JWT_SECRET
@@ -259,6 +261,7 @@ const liveCache = {
   warnings: { data: null, fetchedAt: 0, pending: null, retryAt: 0 },
   weather: { data: null, fetchedAt: 0, pending: null, retryAt: 0 },
 }
+const commonsCache = new Map()
 
 function decodeXml(value) {
   return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -515,6 +518,117 @@ app.get('/api/stats', asyncHandler(async (_req, res) => {
 
 // ---- places data + trip planner (login required so the AI key cannot be used anonymously)
 app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, dataNotes: destinationDataNotes, places: places.map(({ next, ...p }) => p) }))
+
+function metadataText(value) {
+  return (value || '').replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/\s+/g, ' ').trim()
+}
+
+async function loadCommonsImages(place) {
+  const params = new URLSearchParams({
+    action: 'query',
+    generator: 'search',
+    gsrsearch: `filetype:bitmap "${place.name}" ${place.district} Uttarakhand`,
+    gsrnamespace: '6',
+    gsrlimit: '20',
+    prop: 'imageinfo',
+    iiprop: 'url|extmetadata',
+    iiurlwidth: '1200',
+    format: 'json',
+    origin: '*',
+  })
+  const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+    signal: AbortSignal.timeout(12000),
+    headers: { Accept: 'application/json', 'User-Agent': 'DevbhoomiYatra/1.0 (destination photo gallery)' },
+  })
+  if (!response.ok) throw new Error(`Wikimedia Commons returned ${response.status}`)
+  const payload = await response.json()
+  if (payload.error) throw new Error('Wikimedia Commons could not return images')
+  const pages = Object.values(payload.query?.pages || {})
+
+  return pages.flatMap(page => {
+    const image = page.imageinfo?.[0]
+    const metadata = image?.extmetadata || {}
+    if (!image?.thumburl || !image?.descriptionurl || !metadata.LicenseShortName?.value || !metadata.LicenseUrl?.value) return []
+    const searchableText = `${page.title} ${metadata.ObjectName?.value || ''} ${metadata.ImageDescription?.value || ''}`
+      .replace(/<[^>]*>/g, ' ').toLocaleLowerCase()
+    if (!searchableText.includes(place.name.toLocaleLowerCase())) return []
+    let imageUrl
+    let descriptionUrl
+    let licenseUrl
+    try {
+      imageUrl = new URL(image.thumburl)
+      descriptionUrl = new URL(image.descriptionurl)
+      licenseUrl = new URL(metadata.LicenseUrl.value)
+    } catch {
+      return []
+    }
+    if (imageUrl.protocol !== 'https:' || imageUrl.hostname !== 'upload.wikimedia.org'
+      || descriptionUrl.protocol !== 'https:' || descriptionUrl.hostname !== 'commons.wikimedia.org'
+      || !['https:', 'http:'].includes(licenseUrl.protocol)) return []
+    return [{
+      id: String(page.pageid),
+      title: metadataText(metadata.ObjectName?.value || page.title.replace(/^File:/, '')),
+      description: metadataText(metadata.ImageDescription?.value),
+      thumbnailUrl: imageUrl.href,
+      pageUrl: descriptionUrl.href,
+      artist: metadataText(metadata.Artist?.value) || 'Author not listed',
+      license: metadataText(metadata.LicenseShortName.value),
+      licenseUrl: licenseUrl.href,
+    }]
+  }).slice(0, 8)
+}
+
+async function getCachedCommonsImages(place) {
+ const cached = commonsCache.get(place.id)
+ if (cached && cached.expiresAt > Date.now()) return cached.data
+ if (cached?.pending) return cached.pending
+
+ const entry = { expiresAt: 0, data: null, pending: null }
+ entry.pending = loadCommonsImages(place).then(images => {
+    entry.data = { images, source: 'https://commons.wikimedia.org/', updatedAt: new Date().toISOString() }
+    entry.expiresAt = Date.now() + COMMONS_CACHE_TTL_MS
+    return entry.data
+  }).catch(error => {
+    commonsCache.delete(place.id)
+    throw error
+  }).finally(() => { entry.pending = null })
+  commonsCache.set(place.id, entry)
+  return entry.pending
+}
+
+app.get('/api/place-thumbnails', asyncHandler(async (req, res) => {
+  const ids = typeof req.query.ids === 'string' ? [...new Set(req.query.ids.split(',').filter(Boolean))] : []
+  if (ids.length < 1 || ids.length > 100) {
+    return res.status(400).json({ error: 'Provide between 1 and 100 destination IDs' })
+  }
+  const requestedPlaces = ids.map(id => places.find(place => place.id === id))
+  if (requestedPlaces.some(place => !place)) return res.status(400).json({ error: 'One or more destination IDs are invalid' })
+
+  const thumbnails = {}
+  let nextIndex = 0
+  const workers = Array.from({ length: Math.min(4, requestedPlaces.length) }, async () => {
+    while (nextIndex < requestedPlaces.length) {
+      const index = nextIndex++
+      const place = requestedPlaces[index]
+      try {
+        const result = await getCachedCommonsImages(place)
+        thumbnails[place.id] = { image: result.images[0] || null }
+      } catch (error) {
+        thumbnails[place.id] = { error: error.message }
+      }
+    }
+  })
+  await Promise.all(workers)
+  res.json({ thumbnails, source: 'https://commons.wikimedia.org/' })
+}))
+
+app.get('/api/places/:id/images', asyncHandler(async (req, res) => {
+  const place = places.find(candidate => candidate.id === req.params.id)
+  if (!place) return res.status(404).json({ error: 'Destination not found' })
+  res.json(await getCachedCommonsImages(place))
+}))
 
 app.post('/api/recommendation-feedback', asyncHandler(async (req, res) => {
   const { destinationId, rating, region, month, interests } = req.body ?? {}
