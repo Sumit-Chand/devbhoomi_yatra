@@ -11,13 +11,13 @@ function timestamp(value) {
   return value ? new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'time unavailable'
 }
 
-function SourceStatus({ source, updatedAt, stale, error }) {
+function SourceStatus({ source, updatedAt, stale }) {
+  const sourceName = source.includes('open-meteo') ? 'Open-Meteo' : 'NDMA SACHET'
   return (
     <p className="mt-2 text-sm text-ink/70">
-      Source: <a className="underline" href={source} target="_blank" rel="noreferrer">{source.includes('open-meteo') ? 'Open-Meteo' : 'NDMA SACHET'}</a>
+      Source: <a className="underline" href={source} target="_blank" rel="noreferrer">{sourceName}</a>
       {updatedAt && ` · Updated ${timestamp(updatedAt)}`}
       {stale && ' · Showing last retrieved data; refresh failed.'}
-      {error && !stale && ` · Source unavailable: ${error}`}
     </p>
   )
 }
@@ -37,7 +37,7 @@ export default function Alerts() {
         <section className="mt-8">
           <h2 className="text-2xl font-semibold text-pine">Official Uttarakhand alerts</h2>
           <SourceStatus {...warnings} />
-          {warnings.error && <p className="mt-3 text-red-800">Could not refresh official alerts: {warnings.error}</p>}
+          {warnings.error && !warnings.stale && <p className="mt-3 text-red-800">Could not refresh official alerts right now.</p>}
           {warnings.alerts?.length === 0 && <p className="mt-4">No current Uttarakhand-specific alerts were found in the feed. This does not guarantee that travel conditions are safe.</p>}
           <ul className="mt-4 space-y-3">
             {warnings.alerts?.map(alert => (
@@ -60,7 +60,13 @@ export default function Alerts() {
           <h2 className="text-2xl font-semibold text-pine">Weather by district</h2>
           <p className="mt-1 text-ink/70">Model forecast for one representative location per district; mountain conditions can differ substantially nearby.</p>
           <SourceStatus {...weather} />
-          {weather.error && <p className="mt-3 text-red-800">Could not refresh forecasts: {weather.error}</p>}
+          {weather.error && !weather.stale && (
+            <p className="mt-3 text-amber-900">
+              {weather.retryAt
+                ? `The weather provider is rate-limiting requests. Forecasts should be available to retry after ${timestamp(weather.retryAt)}.`
+                : `Forecasts are temporarily unavailable: ${weather.error}`}
+            </p>
+          )}
           <ul className="mt-4 grid gap-3 sm:grid-cols-2">
             {weather.forecasts?.map(forecast => (
               <li key={forecast.district} className="bg-white border border-pine/15 rounded-lg p-4">

@@ -19,6 +19,8 @@ const STATUSES = ['Pending', 'In Review', 'Resolved', 'Rejected']
 const MAX_REPORTS = 1000
 const MONGODB_URI = process.env.MONGODB_URI?.trim()
 const LIVE_DATA_TTL_MS = 10 * 60 * 1000
+const WEATHER_BATCH_SIZE = 5
+const WEATHER_RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000
 const NDMA_FEED_URL = 'https://sachet.ndma.gov.in/cap_public_website/rss/rss_india.xml'
 const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast'
 const WEATHER_SOURCE_URL = 'https://open-meteo.com/'
@@ -222,8 +224,8 @@ const districtNames = [
 const districtPattern = new RegExp(`\\b(?:${districtNames.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'i')
 const weatherPoints = places.filter((place, index) => places.findIndex(p => p.district === place.district) === index)
 const liveCache = {
-  warnings: { data: null, fetchedAt: 0, pending: null },
-  weather: { data: null, fetchedAt: 0, pending: null },
+  warnings: { data: null, fetchedAt: 0, pending: null, retryAt: 0 },
+  weather: { data: null, fetchedAt: 0, pending: null, retryAt: 0 },
 }
 
 function decodeXml(value) {
@@ -324,18 +326,35 @@ const weatherCodeNames = {
 }
 
 async function loadWeather() {
-  const params = new URLSearchParams({
-    latitude: weatherPoints.map(p => p.lat).join(','),
-    longitude: weatherPoints.map(p => p.lng).join(','),
-    current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m',
-    hourly: 'precipitation_probability',
-    forecast_days: '1',
-    timezone: 'Asia/Kolkata',
-  })
-  const response = await fetch(`${WEATHER_API_URL}?${params}`, { signal: AbortSignal.timeout(12000) })
-  if (!response.ok) throw new Error(`Weather forecast source returned ${response.status}`)
-  const payload = await response.json()
-  if (!Array.isArray(payload) || payload.length !== weatherPoints.length) throw new Error('Weather forecast source returned unexpected data')
+  const payload = []
+  for (let i = 0; i < weatherPoints.length; i += WEATHER_BATCH_SIZE) {
+    const batch = weatherPoints.slice(i, i + WEATHER_BATCH_SIZE)
+    const params = new URLSearchParams({
+      latitude: batch.map(p => p.lat).join(','),
+      longitude: batch.map(p => p.lng).join(','),
+      current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m',
+      hourly: 'precipitation_probability',
+      forecast_days: '1',
+      timezone: 'Asia/Kolkata',
+    })
+    const response = await fetch(`${WEATHER_API_URL}?${params}`, { signal: AbortSignal.timeout(12000) })
+    if (!response.ok) {
+      const error = new Error(`Weather forecast source returned ${response.status}`)
+      error.status = response.status
+      const retryAfter = response.headers.get('retry-after')
+      const retryDelay = retryAfter && /^\d+$/.test(retryAfter)
+        ? Number(retryAfter) * 1000
+        : retryAfter && Number.isFinite(Date.parse(retryAfter))
+          ? Math.max(0, Date.parse(retryAfter) - Date.now())
+          : WEATHER_RATE_LIMIT_COOLDOWN_MS
+      if (response.status === 429) error.retryAt = new Date(Date.now() + retryDelay).toISOString()
+      throw error
+    }
+    const result = await response.json()
+    const forecasts = Array.isArray(result) ? result : [result]
+    if (forecasts.length !== batch.length) throw new Error('Weather forecast source returned unexpected data')
+    payload.push(...forecasts)
+  }
 
   return payload.map((forecast, i) => {
     const point = weatherPoints[i]
@@ -364,12 +383,27 @@ async function readLiveData(source) {
   if (cache.data && Date.now() - cache.fetchedAt < LIVE_DATA_TTL_MS) {
     return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: false }
   }
+  if (cache.retryAt > Date.now()) {
+    const error = new Error('The weather provider is temporarily rate limiting requests.')
+    error.retryAt = new Date(cache.retryAt).toISOString()
+    if (cache.data) {
+      return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: true, error: error.message, retryAt: error.retryAt }
+    }
+    throw error
+  }
   if (!cache.pending) {
     cache.pending = (source === 'warnings' ? loadOfficialWarnings() : loadWeather())
       .then(data => {
         cache.data = data
         cache.fetchedAt = Date.now()
+        cache.retryAt = 0
         return data
+      })
+      .catch(error => {
+        if (source === 'weather' && error.status === 429) {
+          cache.retryAt = error.retryAt ? Date.parse(error.retryAt) : Date.now() + WEATHER_RATE_LIMIT_COOLDOWN_MS
+        }
+        throw error
       })
       .finally(() => { cache.pending = null })
   }
@@ -377,7 +411,8 @@ async function readLiveData(source) {
     const data = await cache.pending
     return { data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: false }
   } catch (error) {
-    if (cache.data) return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: true, error: error.message }
+    if (cache.retryAt > Date.now()) error.retryAt = new Date(cache.retryAt).toISOString()
+    if (cache.data) return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: true, error: error.message, retryAt: error.retryAt }
     throw error
   }
 }
@@ -399,8 +434,9 @@ app.get('/api/alerts', async (_req, res) => {
     updatedAt: weatherResult.value.updatedAt,
     stale: weatherResult.value.stale,
     error: weatherResult.value.error || null,
+    retryAt: weatherResult.value.retryAt || null,
     source: WEATHER_SOURCE_URL,
-  } : { forecasts: null, error: weatherResult.reason.message, source: WEATHER_SOURCE_URL }
+  } : { forecasts: null, error: weatherResult.reason.message, retryAt: weatherResult.reason.retryAt || null, source: WEATHER_SOURCE_URL }
   if (warningsResult.status === 'rejected' && weatherResult.status === 'rejected') {
     return res.status(502).json({ error: 'Live alert and weather sources are currently unavailable', warnings, weather })
   }
