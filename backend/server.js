@@ -5,12 +5,15 @@ import cors from 'cors'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
-import { randomUUID, randomBytes } from 'node:crypto'
+import { createHash, randomUUID, randomBytes } from 'node:crypto'
 import { places, buildRoute, buildItinerary } from './places.js'
 
 const PORT = process.env.PORT || 5000
 const ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase()
+const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim()
+const EMAIL_FROM = process.env.EMAIL_FROM?.trim()
+const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL?.trim()
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const STATUSES = ['Pending', 'In Review', 'Resolved', 'Rejected']
 const MAX_REPORTS = 1000
@@ -39,6 +42,9 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, maxlength: 120 },
   hash: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], required: true },
+  emailVerified: { type: Boolean, default: true },
+  verificationTokenHash: String,
+  verificationTokenExpiresAt: Date,
 }, { timestamps: true, versionKey: false })
 const reportSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -51,19 +57,67 @@ const User = mongoose.model('User', userSchema)
 const Report = mongoose.model('Report', reportSchema)
 const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
 const sign = u => jwt.sign({ sub: u.id, role: u.role }, SECRET, { expiresIn: '7d' })
-const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role })
+const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role === 'admin' && u.emailVerified === true ? 'admin' : 'user' })
 const asyncHandler = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
 const findUserByEmail = email => MONGODB_URI ? User.findOne({ email }).lean() : users.find(u => u.email === email)
 const findUserById = id => MONGODB_URI ? User.findOne({ id }).lean() : users.find(u => u.id === id)
 const listReports = () => MONGODB_URI ? Report.find({}, { _id: 0, id: 1, category: 1, description: 1, location: 1, status: 1 }).lean() : reports
 const countReports = () => MONGODB_URI ? Report.countDocuments() : reports.length
+const hashToken = token => createHash('sha256').update(token).digest('hex')
 
 function auth(req, res, next) {
   const token = (req.headers.authorization || '').replace(/^Bearer /, '')
   try { req.user = jwt.verify(token, SECRET); next() }
   catch { res.status(401).json({ error: 'Please log in' }) }
 }
-const adminOnly = (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }))
+const adminOnly = asyncHandler(async (req, res, next) => {
+  const user = await findUserById(req.user.sub)
+  if (user?.role !== 'admin' || user.emailVerified !== true) return res.status(403).json({ error: 'Admin only' })
+  next()
+})
+
+async function sendAdminVerificationEmail(email, token) {
+  const verifyUrl = new URL('/verify-admin', `${PUBLIC_APP_URL.replace(/\/+$/, '')}/`)
+  verifyUrl.searchParams.set('token', token)
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(10000),
+    body: JSON.stringify({
+      from: EMAIL_FROM,
+      to: [email],
+      subject: 'Verify your Devbhoomi Yatra admin email',
+      text: `Verify your admin account by opening this link within 30 minutes: ${verifyUrl}`,
+      html: `<p>Verify your Devbhoomi Yatra admin account by opening this link within 30 minutes:</p><p><a href="${verifyUrl}">Verify admin email</a></p>`,
+    }),
+  })
+  if (!response.ok) throw new Error(`Resend returned status ${response.status}`)
+}
+
+async function issueAdminVerification(user) {
+  if (!RESEND_API_KEY || !EMAIL_FROM || !PUBLIC_APP_URL) {
+    throw new Error('Admin email verification is not configured on the server')
+  }
+  const token = randomBytes(32).toString('hex')
+  const verification = {
+    verificationTokenHash: hashToken(token),
+    verificationTokenExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+  }
+  if (MONGODB_URI) await User.updateOne({ id: user.id }, { $set: verification })
+  else Object.assign(user, verification)
+
+  try {
+    await sendAdminVerificationEmail(user.email, token)
+  } catch (error) {
+    if (MONGODB_URI) {
+      await User.updateOne({ id: user.id }, { $unset: { verificationTokenHash: 1, verificationTokenExpiresAt: 1 } })
+    } else {
+      delete user.verificationTokenHash
+      delete user.verificationTokenExpiresAt
+    }
+    throw error
+  }
+}
 
 // ---- health
 app.get('/api/health', (_req, res) => res.json({ ok: true, storage: MONGODB_URI ? 'mongodb' : 'memory' }))
@@ -76,8 +130,20 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   if (!name || !email || !/^\S+@\S+\.\S+$/.test(email) || typeof password !== 'string' || password.length < 8 || password.length > 72) {
     return res.status(400).json({ error: 'Enter your name, a valid email and a password of 8 to 72 characters' })
   }
-  if (await findUserByEmail(email)) return res.status(409).json({ error: 'This email is already registered' })
-  const u = { id: randomUUID(), name, email, hash: await bcrypt.hash(password, 10), role: email === ADMIN_EMAIL ? 'admin' : 'user' }
+  const adminCandidate = Boolean(ADMIN_EMAIL) && email === ADMIN_EMAIL
+  const existing = await findUserByEmail(email)
+  if (existing) return res.status(409).json({ error: 'This email is already registered. Log in to request admin verification if this is the configured admin email.' })
+  if (adminCandidate && (!RESEND_API_KEY || !EMAIL_FROM || !PUBLIC_APP_URL)) {
+    return res.status(503).json({ error: 'Admin email verification is not configured on the server' })
+  }
+  const u = {
+    id: randomUUID(),
+    name,
+    email,
+    hash: await bcrypt.hash(password, 10),
+    role: 'user',
+    emailVerified: !adminCandidate,
+  }
   if (MONGODB_URI) {
     try { await User.create(u) }
     catch (error) {
@@ -85,6 +151,14 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
       throw error
     }
   } else users.push(u)
+  if (adminCandidate) {
+    try { await issueAdminVerification(u) }
+    catch (error) {
+      console.error('Admin verification email failed:', error.message)
+      return res.status(502).json({ error: 'Could not send the admin verification email. Log in to request another link.' })
+    }
+    return res.status(202).json({ verificationRequired: true, message: 'Check the configured admin email inbox for a verification link. It expires in 30 minutes.' })
+  }
   res.status(201).json({ token: sign(u), user: pub(u) })
 }))
 
@@ -95,7 +169,44 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
   if (!u || typeof password !== 'string' || !(await bcrypt.compare(password, u.hash))) {
     return res.status(401).json({ error: 'Email or password is incorrect' })
   }
+  if (u.email === ADMIN_EMAIL && (u.emailVerified !== true || u.role !== 'admin')) {
+    try { await issueAdminVerification(u) }
+    catch (error) {
+      console.error('Admin verification email failed:', error.message)
+      return res.status(503).json({ error: 'Could not send the admin verification email. Try again later.' })
+    }
+    return res.status(202).json({ verificationRequired: true, message: 'Check the configured admin email inbox for a verification link. It expires in 30 minutes.' })
+  }
   res.json({ token: sign(u), user: pub(u) })
+}))
+
+app.post('/api/auth/verify-admin', asyncHandler(async (req, res) => {
+  const token = req.body?.token
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) {
+    return res.status(400).json({ error: 'The verification link is invalid or has expired' })
+  }
+  const tokenHash = hashToken(token)
+  let user
+  if (MONGODB_URI) {
+    user = await User.findOneAndUpdate(
+      { email: ADMIN_EMAIL, verificationTokenHash: tokenHash, verificationTokenExpiresAt: { $gt: new Date() } },
+      {
+        $set: { role: 'admin', emailVerified: true },
+        $unset: { verificationTokenHash: 1, verificationTokenExpiresAt: 1 },
+      },
+      { new: true },
+    ).lean()
+  } else {
+    user = users.find(u => u.email === ADMIN_EMAIL && u.verificationTokenHash === tokenHash && u.verificationTokenExpiresAt > new Date())
+    if (user) {
+      user.role = 'admin'
+      user.emailVerified = true
+      delete user.verificationTokenHash
+      delete user.verificationTokenExpiresAt
+    }
+  }
+  if (!user) return res.status(400).json({ error: 'The verification link is invalid or has expired' })
+  res.json({ message: 'Admin email verified. You can now log in.' })
 }))
 
 app.get('/api/auth/me', auth, asyncHandler(async (req, res) => {

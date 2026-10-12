@@ -9,13 +9,18 @@ export default function Login() {
   const [mode, setMode] = useState('login')
   const [f, setF] = useState({ name: '', email: '', password: '' })
   const [err, setErr] = useState('')
+  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const set = k => e => setF(x => ({ ...x, [k]: e.target.value }))
 
   async function submit(e) {
-    e.preventDefault(); setBusy(true); setErr('')
+    e.preventDefault(); setBusy(true); setErr(''); setNotice('')
     try {
-      await (mode === 'login' ? login({ email: f.email, password: f.password }) : register(f))
+      const result = await (mode === 'login' ? login({ email: f.email, password: f.password }) : register(f))
+      if (result.verificationRequired) {
+        setNotice(result.message)
+        return
+      }
       nav(loc.state?.from || '/planner', { replace: true })
     } catch (x) { setErr(x.message) } finally { setBusy(false) }
   }
@@ -34,7 +39,8 @@ export default function Login() {
         </button>
       </form>
       <p aria-live="polite" className="mt-3 text-red-800">{err}</p>
-      <button className="mt-4 underline text-pine" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr('') }}>
+      {notice && <p role="status" className="mt-3 bg-glacier rounded-md p-3">{notice}</p>}
+      <button className="mt-4 underline text-pine" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(''); setNotice('') }}>
         {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}
       </button>
     </div>

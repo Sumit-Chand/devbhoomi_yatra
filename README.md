@@ -24,4 +24,6 @@ Weather data is attributed to [Open-Meteo](https://open-meteo.com/). Official al
 
 Users and reports are persisted in MongoDB when `MONGODB_URI` is set in `backend/.env`. Without it, the backend explicitly runs in temporary in-memory mode, and those records are lost when it restarts. For local development, you can use a local MongoDB server or a MongoDB Atlas database connection string. Keep the connection string private and never commit it. Existing in-memory records are not automatically migrated into MongoDB.
 
+To enable admin email verification, set `ADMIN_EMAIL`, `RESEND_API_KEY`, `EMAIL_FROM` (a sender address verified with Resend), and `PUBLIC_APP_URL` in `backend/.env`. Only the configured admin email receives an admin role, and only after opening the one-time verification link sent through Resend. Links expire after 30 minutes. Existing unverified admin records must log in with their configured email to request verification; admin-only API actions also check the stored verified role, so old admin tokens alone do not grant access. Keep all mail credentials private and never commit `.env`.
+
 Never commit `.env` (it is git-ignored).

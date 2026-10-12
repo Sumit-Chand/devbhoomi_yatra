@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Alerts from './pages/Alerts.jsx'
 import Planner from './pages/Planner.jsx'
 import Login from './pages/Login.jsx'
+import VerifyAdmin from './pages/VerifyAdmin.jsx'
 import { useAuth } from './auth.jsx'
 
 const link = ({ isActive }) =>
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/report" element={<Report />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/verify-admin" element={<VerifyAdmin />} />
           <Route path="/planner" element={<RequireAuth><Planner /></RequireAuth>} />
           <Route path="*" element={
             <div className="max-w-5xl mx-auto px-4 py-16">
@@ -51,7 +53,7 @@ export default function App() {
         </Routes>
       </main>
       <footer className="bg-ink text-snow/80 text-sm">
-        <p className="max-w-5xl mx-auto px-4 py-4">Destination and alert information on this site is sample data. Confirm road, weather and permit details with local authorities before you travel.</p>
+        <p className="max-w-5xl mx-auto px-4 py-4">Destination details are curated and approximate. Weather forecasts are model output, not official warnings; confirm road, weather and permit details with local authorities before you travel.</p>
       </footer>
     </div>
   )
