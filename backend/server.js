@@ -482,7 +482,7 @@ app.get('/api/stats', asyncHandler(async (_req, res) => {
 }))
 
 // ---- places data + trip planner (login required so the AI key cannot be used anonymously)
-app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, places: places.map(({ next, months, ...p }) => p) }))
+app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, places: places.map(({ next, ...p }) => p) }))
 
 app.post('/api/ai/plan-trip', auth, async (req, res) => {
   const days = Math.min(10, Math.max(1, parseInt(req.body?.days, 10) || 3))
