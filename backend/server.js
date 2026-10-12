@@ -5,21 +5,31 @@ import cors from 'cors'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import mongoose from 'mongoose'
-import { randomUUID, randomBytes } from 'node:crypto'
+import { createHash, randomUUID, randomBytes } from 'node:crypto'
 import { places, buildRoute, buildItinerary } from './places.js'
+import { destinationDataNotes } from './destination-sources.js'
 
 const PORT = process.env.PORT || 5000
 const ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase()
+const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim()
+const EMAIL_FROM = process.env.EMAIL_FROM?.trim()
+const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL?.trim()
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const STATUSES = ['Pending', 'In Review', 'Resolved', 'Rejected']
 const MAX_REPORTS = 1000
+const MAX_RECOMMENDATION_FEEDBACK = 20000
 const MONGODB_URI = process.env.MONGODB_URI?.trim()
 const LIVE_DATA_TTL_MS = 10 * 60 * 1000
+const WEATHER_BATCH_SIZE = 5
+const WEATHER_RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000
 const NDMA_FEED_URL = 'https://sachet.ndma.gov.in/cap_public_website/rss/rss_india.xml'
 const WEATHER_API_URL = 'https://api.open-meteo.com/v1/forecast'
 const WEATHER_SOURCE_URL = 'https://open-meteo.com/'
 const ALERT_SOURCE_URL = 'https://sachet.ndma.gov.in/'
+const COMMONS_API_URL = 'https://commons.wikimedia.org/w/api.php'
+const COMMONS_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const RECOMMENDATION_INTERESTS = new Set(places.flatMap(place => place.tags))
 
 let SECRET = process.env.JWT_SECRET
 if (!SECRET) {
@@ -33,12 +43,16 @@ app.use(express.json({ limit: '10kb' }))
 
 const reports = []
 const users = []
+const recommendationFeedback = []
 const userSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true, maxlength: 60 },
   email: { type: String, required: true, unique: true, maxlength: 120 },
   hash: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], required: true },
+  emailVerified: { type: Boolean, default: true },
+  verificationTokenHash: String,
+  verificationTokenExpiresAt: Date,
 }, { timestamps: true, versionKey: false })
 const reportSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -47,23 +61,99 @@ const reportSchema = new mongoose.Schema({
   location: { type: String, required: true, maxlength: 200 },
   status: { type: String, enum: STATUSES, required: true },
 }, { timestamps: true, versionKey: false })
+const recommendationFeedbackSchema = new mongoose.Schema({
+  destinationId: { type: String, required: true, index: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  region: { type: String, enum: ['Any', 'Garhwal', 'Kumaon'], required: true },
+  month: { type: Number, required: true, min: 1, max: 12 },
+  interests: { type: [String], required: true },
+}, { timestamps: true, versionKey: false })
 const User = mongoose.model('User', userSchema)
 const Report = mongoose.model('Report', reportSchema)
+const RecommendationFeedback = mongoose.model('RecommendationFeedback', recommendationFeedbackSchema)
 const text = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
 const sign = u => jwt.sign({ sub: u.id, role: u.role }, SECRET, { expiresIn: '7d' })
-const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role })
+const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role === 'admin' && u.emailVerified === true ? 'admin' : 'user' })
 const asyncHandler = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
 const findUserByEmail = email => MONGODB_URI ? User.findOne({ email }).lean() : users.find(u => u.email === email)
 const findUserById = id => MONGODB_URI ? User.findOne({ id }).lean() : users.find(u => u.id === id)
 const listReports = () => MONGODB_URI ? Report.find({}, { _id: 0, id: 1, category: 1, description: 1, location: 1, status: 1 }).lean() : reports
 const countReports = () => MONGODB_URI ? Report.countDocuments() : reports.length
+const listRecommendationFeedbackSummary = async () => {
+  if (MONGODB_URI) {
+    const rows = await RecommendationFeedback.aggregate([
+      { $group: { _id: '$destinationId', count: { $sum: 1 }, averageRating: { $avg: '$rating' } } },
+      { $project: { _id: 0, destinationId: '$_id', count: 1, averageRating: { $round: ['$averageRating', 1] } } },
+      { $sort: { destinationId: 1 } },
+    ])
+    return rows
+  }
+  const summary = new Map()
+  for (const { destinationId, rating } of recommendationFeedback) {
+    const current = summary.get(destinationId) || { destinationId, count: 0, total: 0 }
+    current.count += 1
+    current.total += rating
+    summary.set(destinationId, current)
+  }
+  return [...summary.values()]
+    .map(({ destinationId, count, total }) => ({ destinationId, count, averageRating: Math.round((total / count) * 10) / 10 }))
+    .sort((a, b) => a.destinationId.localeCompare(b.destinationId))
+}
+const hashToken = token => createHash('sha256').update(token).digest('hex')
 
 function auth(req, res, next) {
   const token = (req.headers.authorization || '').replace(/^Bearer /, '')
   try { req.user = jwt.verify(token, SECRET); next() }
   catch { res.status(401).json({ error: 'Please log in' }) }
 }
-const adminOnly = (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }))
+const adminOnly = asyncHandler(async (req, res, next) => {
+  const user = await findUserById(req.user.sub)
+  if (user?.role !== 'admin' || user.emailVerified !== true) return res.status(403).json({ error: 'Admin only' })
+  next()
+})
+
+async function sendAdminVerificationEmail(email, token) {
+  const verifyUrl = new URL('/verify-admin', `${PUBLIC_APP_URL.replace(/\/+$/, '')}/`)
+  verifyUrl.searchParams.set('token', token)
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(10000),
+    body: JSON.stringify({
+      from: EMAIL_FROM,
+      to: [email],
+      subject: 'Verify your Devbhoomi Yatra admin email',
+      text: `Verify your admin account by opening this link within 30 minutes: ${verifyUrl}`,
+      html: `<p>Verify your Devbhoomi Yatra admin account by opening this link within 30 minutes:</p><p><a href="${verifyUrl}">Verify admin email</a></p>`,
+    }),
+  })
+  if (!response.ok) throw new Error(`Resend returned status ${response.status}`)
+}
+
+async function issueAdminVerification(user) {
+  if (!RESEND_API_KEY || !EMAIL_FROM || !PUBLIC_APP_URL) {
+    throw new Error('Admin email verification is not configured on the server')
+  }
+  const token = randomBytes(32).toString('hex')
+  const verification = {
+    verificationTokenHash: hashToken(token),
+    verificationTokenExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+  }
+  if (MONGODB_URI) await User.updateOne({ id: user.id }, { $set: verification })
+  else Object.assign(user, verification)
+
+  try {
+    await sendAdminVerificationEmail(user.email, token)
+  } catch (error) {
+    if (MONGODB_URI) {
+      await User.updateOne({ id: user.id }, { $unset: { verificationTokenHash: 1, verificationTokenExpiresAt: 1 } })
+    } else {
+      delete user.verificationTokenHash
+      delete user.verificationTokenExpiresAt
+    }
+    throw error
+  }
+}
 
 // ---- health
 app.get('/api/health', (_req, res) => res.json({ ok: true, storage: MONGODB_URI ? 'mongodb' : 'memory' }))
@@ -76,8 +166,20 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
   if (!name || !email || !/^\S+@\S+\.\S+$/.test(email) || typeof password !== 'string' || password.length < 8 || password.length > 72) {
     return res.status(400).json({ error: 'Enter your name, a valid email and a password of 8 to 72 characters' })
   }
-  if (await findUserByEmail(email)) return res.status(409).json({ error: 'This email is already registered' })
-  const u = { id: randomUUID(), name, email, hash: await bcrypt.hash(password, 10), role: email === ADMIN_EMAIL ? 'admin' : 'user' }
+  const adminCandidate = Boolean(ADMIN_EMAIL) && email === ADMIN_EMAIL
+  const existing = await findUserByEmail(email)
+  if (existing) return res.status(409).json({ error: 'This email is already registered. Log in to request admin verification if this is the configured admin email.' })
+  if (adminCandidate && (!RESEND_API_KEY || !EMAIL_FROM || !PUBLIC_APP_URL)) {
+    return res.status(503).json({ error: 'Admin email verification is not configured on the server' })
+  }
+  const u = {
+    id: randomUUID(),
+    name,
+    email,
+    hash: await bcrypt.hash(password, 10),
+    role: 'user',
+    emailVerified: !adminCandidate,
+  }
   if (MONGODB_URI) {
     try { await User.create(u) }
     catch (error) {
@@ -85,6 +187,14 @@ app.post('/api/auth/register', asyncHandler(async (req, res) => {
       throw error
     }
   } else users.push(u)
+  if (adminCandidate) {
+    try { await issueAdminVerification(u) }
+    catch (error) {
+      console.error('Admin verification email failed:', error.message)
+      return res.status(502).json({ error: 'Could not send the admin verification email. Log in to request another link.' })
+    }
+    return res.status(202).json({ verificationRequired: true, message: 'Check the configured admin email inbox for a verification link. It expires in 30 minutes.' })
+  }
   res.status(201).json({ token: sign(u), user: pub(u) })
 }))
 
@@ -95,7 +205,44 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
   if (!u || typeof password !== 'string' || !(await bcrypt.compare(password, u.hash))) {
     return res.status(401).json({ error: 'Email or password is incorrect' })
   }
+  if (u.email === ADMIN_EMAIL && (u.emailVerified !== true || u.role !== 'admin')) {
+    try { await issueAdminVerification(u) }
+    catch (error) {
+      console.error('Admin verification email failed:', error.message)
+      return res.status(503).json({ error: 'Could not send the admin verification email. Try again later.' })
+    }
+    return res.status(202).json({ verificationRequired: true, message: 'Check the configured admin email inbox for a verification link. It expires in 30 minutes.' })
+  }
   res.json({ token: sign(u), user: pub(u) })
+}))
+
+app.post('/api/auth/verify-admin', asyncHandler(async (req, res) => {
+  const token = req.body?.token
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) {
+    return res.status(400).json({ error: 'The verification link is invalid or has expired' })
+  }
+  const tokenHash = hashToken(token)
+  let user
+  if (MONGODB_URI) {
+    user = await User.findOneAndUpdate(
+      { email: ADMIN_EMAIL, verificationTokenHash: tokenHash, verificationTokenExpiresAt: { $gt: new Date() } },
+      {
+        $set: { role: 'admin', emailVerified: true },
+        $unset: { verificationTokenHash: 1, verificationTokenExpiresAt: 1 },
+      },
+      { new: true },
+    ).lean()
+  } else {
+    user = users.find(u => u.email === ADMIN_EMAIL && u.verificationTokenHash === tokenHash && u.verificationTokenExpiresAt > new Date())
+    if (user) {
+      user.role = 'admin'
+      user.emailVerified = true
+      delete user.verificationTokenHash
+      delete user.verificationTokenExpiresAt
+    }
+  }
+  if (!user) return res.status(400).json({ error: 'The verification link is invalid or has expired' })
+  res.json({ message: 'Admin email verified. You can now log in.' })
 }))
 
 app.get('/api/auth/me', auth, asyncHandler(async (req, res) => {
@@ -111,9 +258,10 @@ const districtNames = [
 const districtPattern = new RegExp(`\\b(?:${districtNames.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'i')
 const weatherPoints = places.filter((place, index) => places.findIndex(p => p.district === place.district) === index)
 const liveCache = {
-  warnings: { data: null, fetchedAt: 0, pending: null },
-  weather: { data: null, fetchedAt: 0, pending: null },
+  warnings: { data: null, fetchedAt: 0, pending: null, retryAt: 0 },
+  weather: { data: null, fetchedAt: 0, pending: null, retryAt: 0 },
 }
+const commonsCache = new Map()
 
 function decodeXml(value) {
   return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -213,18 +361,35 @@ const weatherCodeNames = {
 }
 
 async function loadWeather() {
-  const params = new URLSearchParams({
-    latitude: weatherPoints.map(p => p.lat).join(','),
-    longitude: weatherPoints.map(p => p.lng).join(','),
-    current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m',
-    hourly: 'precipitation_probability',
-    forecast_days: '1',
-    timezone: 'Asia/Kolkata',
-  })
-  const response = await fetch(`${WEATHER_API_URL}?${params}`, { signal: AbortSignal.timeout(12000) })
-  if (!response.ok) throw new Error(`Weather forecast source returned ${response.status}`)
-  const payload = await response.json()
-  if (!Array.isArray(payload) || payload.length !== weatherPoints.length) throw new Error('Weather forecast source returned unexpected data')
+  const payload = []
+  for (let i = 0; i < weatherPoints.length; i += WEATHER_BATCH_SIZE) {
+    const batch = weatherPoints.slice(i, i + WEATHER_BATCH_SIZE)
+    const params = new URLSearchParams({
+      latitude: batch.map(p => p.lat).join(','),
+      longitude: batch.map(p => p.lng).join(','),
+      current: 'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m',
+      hourly: 'precipitation_probability',
+      forecast_days: '1',
+      timezone: 'Asia/Kolkata',
+    })
+    const response = await fetch(`${WEATHER_API_URL}?${params}`, { signal: AbortSignal.timeout(12000) })
+    if (!response.ok) {
+      const error = new Error(`Weather forecast source returned ${response.status}`)
+      error.status = response.status
+      const retryAfter = response.headers.get('retry-after')
+      const retryDelay = retryAfter && /^\d+$/.test(retryAfter)
+        ? Number(retryAfter) * 1000
+        : retryAfter && Number.isFinite(Date.parse(retryAfter))
+          ? Math.max(0, Date.parse(retryAfter) - Date.now())
+          : WEATHER_RATE_LIMIT_COOLDOWN_MS
+      if (response.status === 429) error.retryAt = new Date(Date.now() + retryDelay).toISOString()
+      throw error
+    }
+    const result = await response.json()
+    const forecasts = Array.isArray(result) ? result : [result]
+    if (forecasts.length !== batch.length) throw new Error('Weather forecast source returned unexpected data')
+    payload.push(...forecasts)
+  }
 
   return payload.map((forecast, i) => {
     const point = weatherPoints[i]
@@ -253,12 +418,27 @@ async function readLiveData(source) {
   if (cache.data && Date.now() - cache.fetchedAt < LIVE_DATA_TTL_MS) {
     return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: false }
   }
+  if (cache.retryAt > Date.now()) {
+    const error = new Error('The weather provider is temporarily rate limiting requests.')
+    error.retryAt = new Date(cache.retryAt).toISOString()
+    if (cache.data) {
+      return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: true, error: error.message, retryAt: error.retryAt }
+    }
+    throw error
+  }
   if (!cache.pending) {
     cache.pending = (source === 'warnings' ? loadOfficialWarnings() : loadWeather())
       .then(data => {
         cache.data = data
         cache.fetchedAt = Date.now()
+        cache.retryAt = 0
         return data
+      })
+      .catch(error => {
+        if (source === 'weather' && error.status === 429) {
+          cache.retryAt = error.retryAt ? Date.parse(error.retryAt) : Date.now() + WEATHER_RATE_LIMIT_COOLDOWN_MS
+        }
+        throw error
       })
       .finally(() => { cache.pending = null })
   }
@@ -266,7 +446,8 @@ async function readLiveData(source) {
     const data = await cache.pending
     return { data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: false }
   } catch (error) {
-    if (cache.data) return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: true, error: error.message }
+    if (cache.retryAt > Date.now()) error.retryAt = new Date(cache.retryAt).toISOString()
+    if (cache.data) return { data: cache.data, updatedAt: new Date(cache.fetchedAt).toISOString(), stale: true, error: error.message, retryAt: error.retryAt }
     throw error
   }
 }
@@ -288,8 +469,9 @@ app.get('/api/alerts', async (_req, res) => {
     updatedAt: weatherResult.value.updatedAt,
     stale: weatherResult.value.stale,
     error: weatherResult.value.error || null,
+    retryAt: weatherResult.value.retryAt || null,
     source: WEATHER_SOURCE_URL,
-  } : { forecasts: null, error: weatherResult.reason.message, source: WEATHER_SOURCE_URL }
+  } : { forecasts: null, error: weatherResult.reason.message, retryAt: weatherResult.reason.retryAt || null, source: WEATHER_SOURCE_URL }
   if (warningsResult.status === 'rejected' && weatherResult.status === 'rejected') {
     return res.status(502).json({ error: 'Live alert and weather sources are currently unavailable', warnings, weather })
   }
@@ -335,7 +517,144 @@ app.get('/api/stats', asyncHandler(async (_req, res) => {
 }))
 
 // ---- places data + trip planner (login required so the AI key cannot be used anonymously)
-app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, places: places.map(({ next, months, ...p }) => p) }))
+app.get('/api/places', (_req, res) => res.json({ demo: false, curated: true, dataNotes: destinationDataNotes, places: places.map(({ next, ...p }) => p) }))
+
+function metadataText(value) {
+  return (value || '').replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/\s+/g, ' ').trim()
+}
+
+async function loadCommonsImages(place) {
+  const params = new URLSearchParams({
+    action: 'query',
+    generator: 'search',
+    gsrsearch: `filetype:bitmap "${place.name}" ${place.district} Uttarakhand`,
+    gsrnamespace: '6',
+    gsrlimit: '20',
+    prop: 'imageinfo',
+    iiprop: 'url|extmetadata',
+    iiurlwidth: '1200',
+    format: 'json',
+    origin: '*',
+  })
+  const response = await fetch(`${COMMONS_API_URL}?${params}`, {
+    signal: AbortSignal.timeout(12000),
+    headers: { Accept: 'application/json', 'User-Agent': 'DevbhoomiYatra/1.0 (destination photo gallery)' },
+  })
+  if (!response.ok) throw new Error(`Wikimedia Commons returned ${response.status}`)
+  const payload = await response.json()
+  if (payload.error) throw new Error('Wikimedia Commons could not return images')
+  const pages = Object.values(payload.query?.pages || {})
+
+  return pages.flatMap(page => {
+    const image = page.imageinfo?.[0]
+    const metadata = image?.extmetadata || {}
+    if (!image?.thumburl || !image?.descriptionurl || !metadata.LicenseShortName?.value || !metadata.LicenseUrl?.value) return []
+    const searchableText = `${page.title} ${metadata.ObjectName?.value || ''} ${metadata.ImageDescription?.value || ''}`
+      .replace(/<[^>]*>/g, ' ').toLocaleLowerCase()
+    if (!searchableText.includes(place.name.toLocaleLowerCase())) return []
+    let imageUrl
+    let descriptionUrl
+    let licenseUrl
+    try {
+      imageUrl = new URL(image.thumburl)
+      descriptionUrl = new URL(image.descriptionurl)
+      licenseUrl = new URL(metadata.LicenseUrl.value)
+    } catch {
+      return []
+    }
+    if (imageUrl.protocol !== 'https:' || imageUrl.hostname !== 'upload.wikimedia.org'
+      || descriptionUrl.protocol !== 'https:' || descriptionUrl.hostname !== 'commons.wikimedia.org'
+      || !['https:', 'http:'].includes(licenseUrl.protocol)) return []
+    return [{
+      id: String(page.pageid),
+      title: metadataText(metadata.ObjectName?.value || page.title.replace(/^File:/, '')),
+      description: metadataText(metadata.ImageDescription?.value),
+      thumbnailUrl: imageUrl.href,
+      pageUrl: descriptionUrl.href,
+      artist: metadataText(metadata.Artist?.value) || 'Author not listed',
+      license: metadataText(metadata.LicenseShortName.value),
+      licenseUrl: licenseUrl.href,
+    }]
+  }).slice(0, 8)
+}
+
+async function getCachedCommonsImages(place) {
+ const cached = commonsCache.get(place.id)
+ if (cached && cached.expiresAt > Date.now()) return cached.data
+ if (cached?.pending) return cached.pending
+
+ const entry = { expiresAt: 0, data: null, pending: null }
+ entry.pending = loadCommonsImages(place).then(images => {
+    entry.data = { images, source: 'https://commons.wikimedia.org/', updatedAt: new Date().toISOString() }
+    entry.expiresAt = Date.now() + COMMONS_CACHE_TTL_MS
+    return entry.data
+  }).catch(error => {
+    commonsCache.delete(place.id)
+    throw error
+  }).finally(() => { entry.pending = null })
+  commonsCache.set(place.id, entry)
+  return entry.pending
+}
+
+app.get('/api/place-thumbnails', asyncHandler(async (req, res) => {
+  const ids = typeof req.query.ids === 'string' ? [...new Set(req.query.ids.split(',').filter(Boolean))] : []
+  if (ids.length < 1 || ids.length > 100) {
+    return res.status(400).json({ error: 'Provide between 1 and 100 destination IDs' })
+  }
+  const requestedPlaces = ids.map(id => places.find(place => place.id === id))
+  if (requestedPlaces.some(place => !place)) return res.status(400).json({ error: 'One or more destination IDs are invalid' })
+
+  const thumbnails = {}
+  let nextIndex = 0
+  const workers = Array.from({ length: Math.min(4, requestedPlaces.length) }, async () => {
+    while (nextIndex < requestedPlaces.length) {
+      const index = nextIndex++
+      const place = requestedPlaces[index]
+      try {
+        const result = await getCachedCommonsImages(place)
+        thumbnails[place.id] = { image: result.images[0] || null }
+      } catch (error) {
+        thumbnails[place.id] = { error: error.message }
+      }
+    }
+  })
+  await Promise.all(workers)
+  res.json({ thumbnails, source: 'https://commons.wikimedia.org/' })
+}))
+
+app.get('/api/places/:id/images', asyncHandler(async (req, res) => {
+  const place = places.find(candidate => candidate.id === req.params.id)
+  if (!place) return res.status(404).json({ error: 'Destination not found' })
+  res.json(await getCachedCommonsImages(place))
+}))
+
+app.post('/api/recommendation-feedback', asyncHandler(async (req, res) => {
+  const { destinationId, rating, region, month, interests } = req.body ?? {}
+  const place = places.find(candidate => candidate.id === destinationId)
+  if (!place || !Number.isInteger(rating) || rating < 1 || rating > 5
+    || !['Any', 'Garhwal', 'Kumaon'].includes(region)
+    || (region !== 'Any' && place.region !== region)
+    || !Number.isInteger(month) || month < 1 || month > 12
+    || !Array.isArray(interests) || interests.length > 9
+    || new Set(interests).size !== interests.length
+    || interests.some(interest => typeof interest !== 'string' || !RECOMMENDATION_INTERESTS.has(interest))) {
+    return res.status(400).json({ error: 'Provide a valid destination, 1-5 rating, region, month, and matching selected interests' })
+  }
+  if (!MONGODB_URI && recommendationFeedback.length >= MAX_RECOMMENDATION_FEEDBACK) {
+    return res.status(503).json({ error: 'Feedback storage is full in temporary memory mode' })
+  }
+
+  const feedback = { destinationId, rating, region, month, interests: [...new Set(interests)] }
+  if (MONGODB_URI) await RecommendationFeedback.create(feedback)
+  else recommendationFeedback.push(feedback)
+  res.status(201).json({ saved: true })
+}))
+
+app.get('/api/recommendation-feedback/summary', asyncHandler(async (_req, res) => {
+  res.json({ ratings: await listRecommendationFeedbackSummary(), linkedAcrossVisits: false })
+}))
 
 app.post('/api/ai/plan-trip', auth, async (req, res) => {
   const days = Math.min(10, Math.max(1, parseInt(req.body?.days, 10) || 3))
