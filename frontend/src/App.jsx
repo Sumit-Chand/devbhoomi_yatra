@@ -10,6 +10,34 @@ import VerifyAdmin from './pages/VerifyAdmin.jsx'
 import { useAuth } from './auth.jsx'
 import { Mountain } from 'lucide-react'
 
+const scenicBackgrounds = {
+  '/destinations': {
+    image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg/1920px-Panorama_of_Himalayas_from_Ranikhet%2C_Uttarakhand%2C_India.jpg',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Panorama_of_Himalayas_from_Ranikhet,_Uttarakhand,_India.jpg',
+    credit: 'Harshit SR / UnpetitproleX · CC BY-SA 4.0',
+  },
+  '/alerts': {
+    image: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Symmetrical_Himalayas.jpg',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Symmetrical_Himalayas.jpg',
+    credit: 'Shubhang99 · CC BY-SA 4.0',
+  },
+  '/planner': {
+    image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Mountains_as_seen_from_Valley_of_Flowers%2C_Uttarakhand.jpg/1280px-Mountains_as_seen_from_Valley_of_Flowers%2C_Uttarakhand.jpg',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Mountains_as_seen_from_Valley_of_Flowers,_Uttarakhand.jpg',
+    credit: 'Kp.vasant · CC BY-SA 4.0',
+  },
+  '/dashboard': {
+    image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Mountains_as_seen_from_Valley_of_Flowers%2C_Uttarakhand.jpg/1280px-Mountains_as_seen_from_Valley_of_Flowers%2C_Uttarakhand.jpg',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Mountains_as_seen_from_Valley_of_Flowers,_Uttarakhand.jpg',
+    credit: 'Kp.vasant · CC BY-SA 4.0',
+  },
+  '/report': {
+    image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Valley_of_Flowers_National_Park_05.JPG/1280px-Valley_of_Flowers_National_Park_05.JPG',
+    pageUrl: 'https://commons.wikimedia.org/wiki/File:Valley_of_Flowers_National_Park_05.JPG',
+    credit: 'Guptaele · CC BY-SA 4.0',
+  },
+}
+
 const link = ({ isActive }) =>
   `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-marigold text-ink' : 'text-snow hover:bg-white/10'}`
 
@@ -21,6 +49,8 @@ function RequireAuth({ children }) {
 
 export default function App() {
   const { user, logout } = useAuth()
+  const { pathname } = useLocation()
+  const background = scenicBackgrounds[pathname]
   return (
     <div className="min-h-screen flex flex-col">
       <header className="site-header">
@@ -36,7 +66,10 @@ export default function App() {
             : <NavLink to="/login" className={link}>Log in</NavLink>}
         </nav>
       </header>
-      <main className="flex-1">
+      <main
+        className={`site-main flex-1${background ? ' site-main--scenic' : ''}`}
+        style={background ? { '--site-background-image': `url("${background.image}")` } : undefined}
+      >
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/destinations" element={<Destinations />} />
@@ -52,6 +85,18 @@ export default function App() {
               <p className="mt-2">Check the address, or <Link className="underline" to="/">go back home</Link>.</p>
             </div>} />
         </Routes>
+        {background && (
+            <a
+              className="photo-credit site-background-credit"
+              href={background.pageUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Background photo attribution: ${background.credit}`}
+              title={`Background photo: ${background.credit}`}
+            >
+              Background photo · {background.credit}
+            </a>
+        )}
       </main>
     </div>
   )

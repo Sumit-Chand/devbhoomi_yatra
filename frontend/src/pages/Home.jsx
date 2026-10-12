@@ -57,7 +57,7 @@ export default function Home() {
             <Link to="/alerts" className="hero-action hero-action--secondary">Check travel updates</Link>
           </div>
         </div>
-        <div className="scenic-hero__credit">
+        <div className="scenic-hero__credit photo-credit">
           <a href={cover.pageUrl} target="_blank" rel="noreferrer">Photo: {cover.artist} · {cover.license}</a>
         </div>
       </section>
@@ -73,7 +73,7 @@ export default function Home() {
               <img src={feature.image} alt={feature.imageAlt} loading="lazy" decoding="async" />
               <span className="home-feature__number">{feature.number}</span>
               <a
-                className="home-feature__credit"
+                className="home-feature__credit photo-credit"
                 href={feature.pageUrl}
                 target="_blank"
                 rel="noreferrer"

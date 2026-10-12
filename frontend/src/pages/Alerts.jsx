@@ -43,7 +43,7 @@ export default function Alerts() {
           {warnings.alerts?.length === 0 && <p className="mt-4">No current Uttarakhand-specific alerts were found in the feed. This does not guarantee that travel conditions are safe.</p>}
           <ul className="mt-4 space-y-3">
             {warnings.alerts?.map(alert => (
-              <li key={alert.id} className="bg-white border border-pine/15 rounded-lg p-4">
+              <li key={alert.id} className="scenic-surface border border-pine/15 rounded-lg p-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className={`text-sm font-semibold px-2 py-0.5 rounded ${severityTone[alert.severity] || 'bg-glacier text-pine'}`}>{alert.severity}</span>
                   <h3 className="font-semibold">{alert.title}</h3>
@@ -71,7 +71,7 @@ export default function Alerts() {
           )}
           <ul className="mt-4 grid gap-3 sm:grid-cols-2">
             {weather.forecasts?.map(forecast => (
-              <li key={forecast.district} className="bg-white border border-pine/15 rounded-lg p-4">
+              <li key={forecast.district} className="scenic-surface border border-pine/15 rounded-lg p-4">
                 <h3 className="font-semibold text-pine">{forecast.district}</h3>
                 <p className="text-sm text-ink/70">Near {forecast.location} · {timestamp(forecast.time)}</p>
                 <p className="mt-2">{forecast.condition} · {forecast.temperatureC}°C (feels like {forecast.apparentTemperatureC}°C)</p>

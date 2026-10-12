@@ -62,7 +62,7 @@ function PhotoTile({ title, image, subtitle, loading, onClick, label }) {
           rel="noreferrer"
           title={`Photo by ${image.artist}, licensed ${image.license}`}
           aria-label={`Photo attribution: ${image.artist}, ${image.license}; open Wikimedia Commons file`}
-          className="absolute right-2 top-2 z-10 max-w-[90%] truncate rounded bg-black/65 px-2 py-1 text-xs text-white underline underline-offset-2"
+          className="photo-credit absolute right-2 top-2 z-10 max-w-[90%] truncate rounded bg-black/65 px-1 py-0.5 text-white underline underline-offset-2"
         >
           {image.artist} · {image.license}
         </a>
@@ -293,7 +293,7 @@ export default function Destinations() {
         {recommendations.length > 0 && selectedInterests.length > 0 && (
           <ol className="mt-4 grid gap-3 sm:grid-cols-3">
             {recommendations.map((place, index) => (
-              <li key={place.id} className="rounded-lg border border-pine/15 bg-white p-4">
+              <li key={place.id} className="scenic-surface rounded-lg border border-pine/15 p-4">
                 <p className="text-sm font-semibold text-pine">Suggestion {index + 1}</p>
                 <h3 className="mt-1 text-lg font-semibold">
                   <button type="button" className="text-left underline decoration-pine/40 underline-offset-2 hover:decoration-pine" onClick={() => openPlace(place)} aria-haspopup="dialog">
@@ -376,7 +376,7 @@ export default function Destinations() {
         {!activitiesLoading && !activitiesError && (
           <ul className="mt-4 grid gap-4 md:grid-cols-2">
             {visibleAdventureDistricts.map(item => (
-              <li key={item.district} className="rounded-xl border border-pine/15 bg-white p-5">
+              <li key={item.district} className="scenic-surface rounded-xl border border-pine/15 p-5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h3 className="text-xl font-semibold text-pine">{item.district}</h3>
                   <span className="text-sm text-ink/60">{item.region}</span>
@@ -435,14 +435,14 @@ export default function Destinations() {
                   <>
                     <ul className="mt-4 grid gap-4 sm:grid-cols-2">
                       {gallery.images.map(image => (
-                        <li key={image.id} className="overflow-hidden rounded-lg border border-pine/15 bg-white">
+                        <li key={image.id} className="scenic-surface overflow-hidden rounded-lg border border-pine/15">
                           <a href={image.pageUrl} target="_blank" rel="noreferrer" aria-label={`Open source photo ${image.title}`}>
                             <img src={image.thumbnailUrl} alt={image.description || image.title} className="h-52 w-full object-cover" loading="lazy" />
                           </a>
                           <div className="p-3 text-sm">
                             <p className="font-medium">{image.title}</p>
-                            <p className="mt-1 text-ink/70">By {image.artist} · <a href={image.licenseUrl} target="_blank" rel="noreferrer" className="underline">{image.license}</a></p>
-                            <a href={image.pageUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block underline text-pine">Source file</a>
+                            <p className="photo-credit mt-1 text-ink/70">By {image.artist} · <a href={image.licenseUrl} target="_blank" rel="noreferrer" className="underline">{image.license}</a></p>
+                            <a href={image.pageUrl} target="_blank" rel="noreferrer" className="photo-credit mt-1 inline-block underline text-pine">Source file</a>
                           </div>
                         </li>
                       ))}

@@ -51,7 +51,7 @@ export default function Planner() {
               <h2 className="text-xl font-semibold text-pine">Your route</h2>
               <ol className="mt-3 space-y-3">
                 {r.route.map((st, i) => (
-                  <li key={st.name} className="bg-white border border-pine/15 rounded-lg p-4">
+                  <li key={st.name} className="scenic-surface border border-pine/15 rounded-lg p-4">
                     {st.leg && <p className="text-sm text-pine mb-1">Next stop from {st.from}: about {st.leg.km} km, {st.leg.h} h by road</p>}
                     {!st.leg && st.from && <p className="text-sm text-pine mb-1">Next stop from {st.from}: check the road distance locally</p>}
                     <h3 className="font-semibold text-lg">{st.name} <span className="font-normal text-ink/70">({st.days} {st.days === 1 ? 'day' : 'days'})</span></h3>
@@ -66,7 +66,7 @@ export default function Planner() {
               <h2 className="text-xl font-semibold text-pine">Day by day</h2>
               <ul className="mt-3 space-y-2">
                 {r.itinerary.map(d => (
-                  <li key={d.day} className="bg-white border border-pine/15 rounded-lg p-3">
+                  <li key={d.day} className="scenic-surface border border-pine/15 rounded-lg p-3">
                     <p className="font-semibold">Day {d.day}{d.date ? `, ${d.date}` : ''}: {d.place}</p>
                     <p>{d.text}</p>
                   </li>
