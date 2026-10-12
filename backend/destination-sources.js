@@ -132,6 +132,50 @@ const districtPlaceReferences = {
       'bharata-temple-devprayag', 'dasharathachal-peak', 'dashrathshila-devprayag',
     ],
   },
+  Dehradun: {
+    organization: 'Uttarakhand Tourism',
+    url: 'https://uttarakhandtourism.gov.in/destination/mussoorie',
+    ids: [
+      'kempty-falls', 'gun-hill', 'lal-tibba', 'mussoorie-mall-road',
+      'bhatta-falls', 'jharipani-falls', 'george-everest-house',
+    ],
+  },
+  'Dehradun district attractions': {
+    organization: 'Dehradun District Administration',
+    url: 'https://dehradun.nic.in/tourist-place/rishikesh/',
+    ids: ['malsi-deer-park', 'robbers-cave', 'forest-research-institute'],
+  },
+  Haridwar: {
+    organization: 'Haridwar District Administration',
+    url: 'https://haridwar.nic.in/tourist-places/',
+    ids: ['har-ki-pauri', 'piran-kaliyar', 'sureshwari-devi-temple', 'rajaji-national-park-haridwar'],
+  },
+  'Haridwar Tourism references': {
+    organization: 'Uttarakhand Tourism',
+    url: 'https://uttarakhandtourism.gov.in/destination/haridwar',
+    ids: ['daksha-mahadev-temple'],
+  },
+  Nainital: {
+    organization: 'Nainital District Administration',
+    url: 'https://nainital.nic.in/tourist-places/',
+    ids: [
+      'naini-lake', 'snow-view-point', 'tiffin-top', 'naina-peak',
+      'gb-pant-high-altitude-zoo', 'naina-devi-temple-nainital',
+    ],
+  },
+  'Udham Singh Nagar': {
+    organization: 'Secondary place references (verify locally)',
+    url: 'https://en.wikipedia.org/wiki/Udham_Singh_Nagar_district',
+    ids: ['nanak-sagar', 'chaiti-temple'],
+  },
+  Uttarkashi: {
+    organization: 'Uttarakhand Tourism',
+    url: 'https://uttarakhandtourism.gov.in/destination/tapovan',
+    ids: [
+      'tapovan-uttarkashi', 'shivling-peak-uttarkashi',
+      'kedartal-lake', 'gomukh-glacier', 'bhaironghati',
+    ],
+  },
 }
 
 for (const { organization, url, ids = [], additionalIds = [] } of Object.values(districtPlaceReferences)) {
