@@ -27,9 +27,7 @@ const scenicBackgrounds = {
     credit: 'Kp.vasant · CC BY-SA 4.0',
   },
   '/dashboard': {
-    image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Mountains_as_seen_from_Valley_of_Flowers%2C_Uttarakhand.jpg/1280px-Mountains_as_seen_from_Valley_of_Flowers%2C_Uttarakhand.jpg',
-    pageUrl: 'https://commons.wikimedia.org/wiki/File:Mountains_as_seen_from_Valley_of_Flowers,_Uttarakhand.jpg',
-    credit: 'Kp.vasant · CC BY-SA 4.0',
+    image: '/dashboard-mountain.png',
   },
   '/report': {
     image: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Valley_of_Flowers_National_Park_05.JPG/1280px-Valley_of_Flowers_National_Park_05.JPG',
@@ -85,7 +83,7 @@ export default function App() {
               <p className="mt-2">Check the address, or <Link className="underline" to="/">go back home</Link>.</p>
             </div>} />
         </Routes>
-        {background && (
+        {background?.pageUrl && background.credit && (
             <a
               className="photo-credit site-background-credit"
               href={background.pageUrl}
